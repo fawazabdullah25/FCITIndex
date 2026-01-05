@@ -67,7 +67,7 @@ const alwaysSuggested = {
 // Grid configuration
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
 const DAY_MAP = { U: 'Sunday', M: 'Monday', T: 'Tuesday', W: 'Wednesday', R: 'Thursday' };
-const PIXELS_PER_HOUR = 60; // Height pixels per hour
+const PIXELS_PER_HOUR = 80; // Height pixels per hour (increased for more space)
 const TIME_PADDING_HOURS = 1; // Padding before earliest and after latest course
 
 // Track current state
@@ -217,12 +217,12 @@ function createCourseBox(course, schedule, isManual = false) {
     box.dataset.days = schedule.days;
 
     // Calculate position based on time (percentage within the grid)
+    // The grid shows time from startHour to endHour, so total duration is (endHour - startHour) hours
     const gridStartMin = currentTimeRange.startHour * 60;
-    const gridEndMin = currentTimeRange.endHour * 60;
-    const gridDuration = gridEndMin - gridStartMin;
+    const totalGridMinutes = (currentTimeRange.endHour - currentTimeRange.startHour) * 60;
 
-    const topPercent = ((schedule.startMin - gridStartMin) / gridDuration) * 100;
-    const heightPercent = ((schedule.endMin - schedule.startMin) / gridDuration) * 100;
+    const topPercent = ((schedule.startMin - gridStartMin) / totalGridMinutes) * 100;
+    const heightPercent = ((schedule.endMin - schedule.startMin) / totalGridMinutes) * 100;
 
     box.style.top = `${topPercent}%`;
     box.style.height = `${heightPercent}%`;
@@ -232,7 +232,7 @@ function createCourseBox(course, schedule, isManual = false) {
         <div class="course-code">${course.subject} ${course.courseCode}</div>
         <div class="course-title">${course.title}</div>
         <div class="course-info">${schedule.room || 'TBA'}</div>
-        <div class="course-instructor">${course.primaryInstructor || 'TBA'}</div>
+        <div class="course-instructor">${schedule.instructor || course.primaryInstructor || 'TBA'}</div>
     `;
 
     box.querySelector('.remove-btn').onclick = async (e) => {
@@ -265,7 +265,7 @@ function displayCourses(courses) {
     const gridHeight = (endHour - startHour) * PIXELS_PER_HOUR;
 
     container.innerHTML = `
-        <h3 class="schedule-title">Your Block Schedule (${courses.length} sections found)</h3>
+        <h3 class="schedule-title">Your Block Schedule</h3>
     `;
 
     // Create grid container
@@ -294,14 +294,18 @@ function displayCourses(courses) {
     const gridBody = document.createElement('div');
     gridBody.className = 'grid-body';
 
-    // Time labels column
+    // Time labels column - use same positioning formula as course boxes
     const timeColumn = document.createElement('div');
     timeColumn.className = 'time-column';
+    const totalGridMinutes = (endHour - startHour) * 60;
 
-    timeLabels.forEach((t, index) => {
+    timeLabels.forEach((t) => {
         const timeLabel = document.createElement('div');
         timeLabel.className = 'time-label';
-        timeLabel.style.top = `${(index / (timeLabels.length - 1)) * 100}%`;
+        // Position each label at its hour mark using minutes (same as course positioning)
+        const labelMinutes = (t.hour - startHour) * 60;
+        const topPercent = (labelMinutes / totalGridMinutes) * 100;
+        timeLabel.style.top = `${topPercent}%`;
         timeLabel.textContent = t.label;
         timeColumn.appendChild(timeLabel);
     });
@@ -313,11 +317,12 @@ function displayCourses(courses) {
         dayColumn.className = 'day-column';
         dayColumn.dataset.day = day;
 
-        // Add hour lines
+        // Add hour lines - use same positioning as time labels
         for (let h = startHour; h <= endHour; h++) {
             const line = document.createElement('div');
             line.className = 'hour-line';
-            const topPercent = ((h - startHour) / (endHour - startHour)) * 100;
+            const lineMinutes = (h - startHour) * 60;
+            const topPercent = (lineMinutes / totalGridMinutes) * 100;
             line.style.top = `${topPercent}%`;
             dayColumn.appendChild(line);
         }
@@ -332,6 +337,7 @@ function displayCourses(courses) {
                 if (!courseDays.includes(day)) return;
 
                 const box = createCourseBox(course, parsed);
+                box.courseData = course; // Store for grid reconstruction
                 dayColumn.appendChild(box);
             });
         });
@@ -436,18 +442,13 @@ async function showSectionChoices(code) {
                         <span class="detail-label">📍 Location:</span>
                         <span class="detail-value">${sched.room || 'TBA'}</span>
                     </div>
+                    <div class="detail-row">
+                        <span class="detail-label">👨‍🏫 Instructor:</span>
+                        <span class="detail-value">${sched.instructor || course.primaryInstructor || 'TBA'}</span>
+                    </div>
                 `;
                 details.appendChild(schedRow);
             });
-
-            // Instructor
-            const instructorRow = document.createElement('div');
-            instructorRow.className = 'detail-row instructor-row';
-            instructorRow.innerHTML = `
-                <span class="detail-label">👨‍🏫 Instructor:</span>
-                <span class="detail-value">${course.primaryInstructor || 'TBA'}</span>
-            `;
-            details.appendChild(instructorRow);
 
             card.appendChild(details);
 
@@ -479,8 +480,54 @@ async function showSectionChoices(code) {
     }
 }
 
-// Add course to existing grid
+// Get all courses currently on the grid
+function getAllCoursesFromGrid() {
+    const courses = [];
+    const seenCRNs = new Set();
+
+    document.querySelectorAll('.course-box').forEach(box => {
+        // Store course data in dataset for reconstruction
+        const courseData = box.courseData;
+        if (courseData && !seenCRNs.has(courseData.crn)) {
+            seenCRNs.add(courseData.crn);
+            courses.push(courseData);
+        }
+    });
+
+    return courses;
+}
+
+// Check if course requires time range expansion
+function needsTimeRangeExpansion(course) {
+    for (const schedule of course.schedules) {
+        const parsed = parseScheduleTime(schedule);
+        if (!parsed) continue;
+
+        const startHour = Math.floor(parsed.startMin / 60);
+        const endHour = Math.ceil(parsed.endMin / 60);
+
+        if (startHour < currentTimeRange.startHour + TIME_PADDING_HOURS ||
+            endHour > currentTimeRange.endHour - TIME_PADDING_HOURS) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Add course to existing grid (or rebuild if time range needs expansion)
 function addCourseToGrid(course) {
+    // Check if we need to expand the time range
+    if (needsTimeRangeExpansion(course)) {
+        // Collect all existing courses
+        const existingCourses = getAllCoursesFromGrid();
+        existingCourses.push(course);
+
+        // Rebuild the entire grid with new time range
+        displayCourses(existingCourses);
+        return;
+    }
+
+    // Otherwise, just add to existing grid
     const gridBody = document.querySelector('.grid-body');
     if (!gridBody) return;
 
@@ -494,6 +541,7 @@ function addCourseToGrid(course) {
             const dayColumn = gridBody.querySelector(`.day-column[data-day="${day}"]`);
             if (dayColumn) {
                 const box = createCourseBox(course, parsed, true);
+                box.courseData = course; // Store for later reconstruction
                 dayColumn.appendChild(box);
             }
         });

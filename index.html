@@ -1,29 +1,34 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <meta charset="UTF-8"/>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-        <title>FcitIndex</title>
-        <link rel="stylesheet" href="style.css"/>
-    </head>
-    <body>
-        <h1>FcitIndex: FCIT Courses Scheduler</h1>
-        <h2>Organize FCIT Courses conveniently</h2>
-        <br>
-        <h3>Build your FCIT Schedule</h3>
 
-        <main>
-            <form id="blockForm">
-                <div class="field">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FcitIndex</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+    <header class="site-header">
+        <div class="logo-section">
+            <span class="logo">FcitIndex</span>
+            <span class="logo-tagline">FCIT Courses Scheduler</span>
+        </div>
+        <h2 class="main-heading">Build Your FCIT Schedule</h2>
+    </header>
+
+    <main>
+        <form id="blockForm">
+            <div class="field">
                 <label for="gender">Gender</label>
                 <select id="gender" required>
                     <option value="">Select Gender</option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                 </select>
-                </div>
+            </div>
 
-                <div class="field">
+            <div class="field">
                 <label for="term">Current Term</label>
                 <select id="term" required>
                     <option value="">Select Term</option>
@@ -35,9 +40,9 @@
                     <option value="9">Term 9</option>
                     <option value="10">Term 10</option>
                 </select>
-                </div>
+            </div>
 
-                <div class="field">
+            <div class="field">
                 <label for="major">Major</label>
                 <select id="major" required>
                     <option value="">Select Major</option>
@@ -45,61 +50,63 @@
                     <option value="IT">Information Technology (IT)</option>
                     <option value="IS">Information Systems (IS)</option>
                 </select>
-                </div>
-                
-                <div class="field">
+            </div>
+
+            <div class="field">
                 <label for="block">Block</label>
                 <select id="block" required>
                     <option value="">Select Block</option>
                 </select>
-                </div>
-                
-                <button type="submit">Load Block Schedule</button>
-            </form>
-        </main>
+            </div>
 
-        <div id="schedule">
-            <div id="timetableContainer"></div>
-            <div id="scheduleControls" style="display:none; margin: 20px 0; text-align: center;">
-                <button id="clearScheduleBtn">Clear Schedule</button>
+            <button type="submit">Load Block Schedule</button>
+        </form>
+    </main>
+
+    <div id="schedule">
+        <div id="timetableContainer"></div>
+        <div id="scheduleControls" style="display:none; margin: 20px 0; text-align: center;">
+            <button id="clearScheduleBtn">Clear Schedule</button>
+        </div>
+    </div>
+
+    <section>
+        <h3>Add Extra Courses</h3>
+
+        <div id="suggestions">
+            <p>Suggested for your term:</p>
+            <div id="suggestedButtons"></div>
+        </div>
+
+        <!-- Course search modal -->
+        <div id="modal" class="modal-overlay">
+            <div class="modal-content">
+                <button onclick="document.getElementById('modal').style.display='none'" class="modal-close-btn"
+                    title="Close">×</button>
+                <h3 id="modalTitle">Choose a section for <span></span></h3>
+                <div id="sectionList"></div>
             </div>
         </div>
 
-        <section>
-            <h3>Add Extra Courses</h3>
-            
-            <div id="suggestions">
-                <p>Suggested for your term:</p>
-                <div id="suggestedButtons"></div>
-            </div>
-
-            <!-- Course search modal -->
-            <div id="modal" class="modal-overlay">
-                <div class="modal-content">
-                    <h3 id="modalTitle">Choose a section for <span></span></h3>
-                    <div id="sectionList"></div>
-                    <button onclick="document.getElementById('modal').style.display='none'" class="modal-cancel-btn">Cancel</button>
+        <!-- Confirmation modal -->
+        <div id="confirmModal" class="modal-overlay">
+            <div class="modal-content confirm-modal">
+                <h3 id="confirmTitle">Confirm Action</h3>
+                <p id="confirmMessage"></p>
+                <div class="confirm-buttons">
+                    <button id="confirmYes" class="confirm-yes-btn">Yes, Remove</button>
+                    <button id="confirmNo" class="confirm-no-btn">Cancel</button>
                 </div>
             </div>
+        </div>
 
-            <!-- Confirmation modal -->
-            <div id="confirmModal" class="modal-overlay">
-                <div class="modal-content confirm-modal">
-                    <h3 id="confirmTitle">Confirm Action</h3>
-                    <p id="confirmMessage"></p>
-                    <div class="confirm-buttons">
-                        <button id="confirmYes" class="confirm-yes-btn">Yes, Remove</button>
-                        <button id="confirmNo" class="confirm-no-btn">Cancel</button>
-                    </div>
-                </div>
-            </div>
+        <div class="search-container">
+            <input type="text" id="courseInput" placeholder="Search for any course (e.g., MATH202)">
+            <button id="fetchBtn">Search & Add</button>
+        </div>
+    </section>
 
-            <div class="search-container">
-                <input type="text" id="courseInput" placeholder="Search for any course (e.g., MATH202)">
-                <button id="fetchBtn">Search & Add</button>
-            </div>
-        </section>
+    <script src="script.js"></script>
+</body>
 
-        <script src="script.js"></script>
-    </body>
 </html>
