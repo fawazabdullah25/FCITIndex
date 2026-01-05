@@ -64,17 +64,17 @@ const alwaysSuggested = {
     }
 };
 
-// Grid configuration constants
+// Grid configuration
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
 const DAY_MAP = { U: 'Sunday', M: 'Monday', T: 'Tuesday', W: 'Wednesday', R: 'Thursday' };
-const START_HOUR = 8;
-const END_HOUR = 20;
-const SLOT_DURATION = 30;
+const PIXELS_PER_HOUR = 60; // Height pixels per hour
+const TIME_PADDING_HOURS = 1; // Padding before earliest and after latest course
 
-// Track current selections for updating suggestions
+// Track current state
 let currentMajor = null;
 let currentTerm = null;
 let currentSuggestions = [];
+let currentTimeRange = { startHour: 8, endHour: 20 }; // Default, will be calculated dynamically
 
 // Parse time string to minutes since midnight
 function parseTime(timeStr) {
@@ -83,6 +83,15 @@ function parseTime(timeStr) {
     if (ampm === 'PM' && hour < 12) hour += 12;
     if (ampm === 'AM' && hour === 12) hour = 0;
     return (hour * 60) + min;
+}
+
+// Format minutes to readable time
+function formatTime(minutes) {
+    let hour = Math.floor(minutes / 60);
+    const min = minutes % 60;
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12 || 12;
+    return `${hour}:${min.toString().padStart(2, '0')} ${ampm}`;
 }
 
 // Check if two time ranges overlap
@@ -100,7 +109,7 @@ function showConfirmModal(title, message) {
         const noBtn = document.getElementById('confirmNo');
 
         if (!modal || !titleEl || !messageEl || !yesBtn || !noBtn) {
-            resolve(confirm(message)); // Fallback to browser confirm
+            resolve(confirm(message));
             return;
         }
 
@@ -114,38 +123,12 @@ function showConfirmModal(title, message) {
             noBtn.onclick = null;
         };
 
-        yesBtn.onclick = () => {
-            cleanup();
-            resolve(true);
-        };
-
-        noBtn.onclick = () => {
-            cleanup();
-            resolve(false);
-        };
+        yesBtn.onclick = () => { cleanup(); resolve(true); };
+        noBtn.onclick = () => { cleanup(); resolve(false); };
     });
 }
 
-// Generate time labels for the grid
-function generateTimeLabels() {
-    const labels = [];
-    for (let h = START_HOUR; h < END_HOUR; h++) {
-        for (let m = 0; m < 60; m += SLOT_DURATION) {
-            const hour = h % 12 || 12;
-            const min = m.toString().padStart(2, '0');
-            const ampm = h < 12 ? 'AM' : 'PM';
-            labels.push(`${hour}:${min} ${ampm}`);
-        }
-    }
-    return labels;
-}
-
-// Calculate grid slot from time in minutes
-function getSlotFromMinutes(minutes) {
-    return Math.floor((minutes - (START_HOUR * 60)) / SLOT_DURATION) + 2;
-}
-
-// Parse schedule time and add parsed values to schedule object
+// Parse schedule time and add parsed values
 function parseScheduleTime(schedule) {
     const timeMatch = schedule.time.match(/(\d{1,2}:\d{2} [AP]M) - (\d{1,2}:\d{2} [AP]M)/);
     if (!timeMatch) return null;
@@ -158,7 +141,44 @@ function parseScheduleTime(schedule) {
     return { ...schedule, startMin, endMin };
 }
 
-// Get list of courses currently on the grid
+// Calculate dynamic time range based on courses
+function calculateTimeRange(courses) {
+    let earliestMin = 24 * 60;
+    let latestMin = 0;
+
+    courses.forEach(course => {
+        course.schedules.forEach(schedule => {
+            const parsed = parseScheduleTime(schedule);
+            if (!parsed) return;
+            earliestMin = Math.min(earliestMin, parsed.startMin);
+            latestMin = Math.max(latestMin, parsed.endMin);
+        });
+    });
+
+    // Default if no courses
+    if (earliestMin >= latestMin) {
+        return { startHour: 8, endHour: 17 };
+    }
+
+    // Add padding and round to full hours
+    const startHour = Math.max(7, Math.floor(earliestMin / 60) - TIME_PADDING_HOURS);
+    const endHour = Math.min(22, Math.ceil(latestMin / 60) + TIME_PADDING_HOURS);
+
+    return { startHour, endHour };
+}
+
+// Generate time labels for grid
+function generateTimeLabels(startHour, endHour) {
+    const labels = [];
+    for (let h = startHour; h <= endHour; h++) {
+        const hour = h % 12 || 12;
+        const ampm = h < 12 ? 'AM' : 'PM';
+        labels.push({ hour: h, label: `${hour}:00 ${ampm}` });
+    }
+    return labels;
+}
+
+// Get courses on grid for suggestion updates
 function getCoursesOnGrid() {
     const grid = document.querySelector('.timetable-grid');
     if (!grid) return [];
@@ -166,15 +186,12 @@ function getCoursesOnGrid() {
     const codes = new Set();
     grid.querySelectorAll('.course-box').forEach(box => {
         const code = box.dataset.courseCode;
-        if (code) {
-            // Convert "CPCS 203" to "CPCS-203" for comparison
-            codes.add(code.replace(' ', '-'));
-        }
+        if (code) codes.add(code.replace(' ', '-'));
     });
     return [...codes];
 }
 
-// Update suggested courses based on what's on the grid
+// Update suggested courses
 function updateSuggestedCourses() {
     if (!currentMajor || !currentTerm) return;
 
@@ -182,7 +199,6 @@ function updateSuggestedCourses() {
     const requiredCodes = termSubjects[currentMajor]?.[currentTerm] || [];
     const alwaysSuggest = alwaysSuggested[currentMajor]?.[currentTerm] || [];
 
-    // Find which required/suggested courses are NOT on the grid
     const missingRequired = requiredCodes.filter(code => !coursesOnGrid.includes(code));
     const missingSuggested = alwaysSuggest.filter(code => !coursesOnGrid.includes(code));
 
@@ -191,23 +207,32 @@ function updateSuggestedCourses() {
     showSuggestedCourses(allSuggestions);
 }
 
-// Create a course box element
-function createCourseBox(course, schedule, startSlot, endSlot, colIndex, isManual = false) {
+// Create course box with pixel-based positioning
+function createCourseBox(course, schedule, isManual = false) {
     const box = document.createElement('div');
-    box.className = isManual ? 'course-box manual-add' : 'course-box';
-    box.style.gridRow = `${startSlot} / ${endSlot}`;
-    box.style.gridColumn = colIndex;
+    box.className = 'course-box';
     box.dataset.courseCode = `${course.subject} ${course.courseCode}`;
     box.dataset.startMin = schedule.startMin;
     box.dataset.endMin = schedule.endMin;
     box.dataset.days = schedule.days;
 
+    // Calculate position based on time (percentage within the grid)
+    const gridStartMin = currentTimeRange.startHour * 60;
+    const gridEndMin = currentTimeRange.endHour * 60;
+    const gridDuration = gridEndMin - gridStartMin;
+
+    const topPercent = ((schedule.startMin - gridStartMin) / gridDuration) * 100;
+    const heightPercent = ((schedule.endMin - schedule.startMin) / gridDuration) * 100;
+
+    box.style.top = `${topPercent}%`;
+    box.style.height = `${heightPercent}%`;
+
     box.innerHTML = `
         <button class="remove-btn" title="Remove course">×</button>
-        <strong>${course.subject} ${course.courseCode}</strong><br>
-        ${course.title}<br>
-        ${schedule.room || 'TBA'}<br>
-        ${course.primaryInstructor || 'TBA'}
+        <div class="course-code">${course.subject} ${course.courseCode}</div>
+        <div class="course-title">${course.title}</div>
+        <div class="course-info">${schedule.room || 'TBA'}</div>
+        <div class="course-instructor">${course.primaryInstructor || 'TBA'}</div>
     `;
 
     box.querySelector('.remove-btn').onclick = async (e) => {
@@ -219,11 +244,8 @@ function createCourseBox(course, schedule, startSlot, endSlot, colIndex, isManua
         );
         if (confirmed) {
             document.querySelectorAll('.course-box').forEach(b => {
-                if (b.dataset.courseCode === courseName) {
-                    b.remove();
-                }
+                if (b.dataset.courseCode === courseName) b.remove();
             });
-            // Update suggestions after removal
             updateSuggestedCourses();
         }
     };
@@ -231,63 +253,95 @@ function createCourseBox(course, schedule, startSlot, endSlot, colIndex, isManua
     return box;
 }
 
-// Display courses in timetable grid
+// Display courses in timetable grid with dynamic time range
 function displayCourses(courses) {
     const container = document.getElementById('timetableContainer');
     if (!container) return;
 
-    const numSlots = ((END_HOUR - START_HOUR) * 60) / SLOT_DURATION;
-    const timeLabels = generateTimeLabels();
+    // Calculate dynamic time range
+    currentTimeRange = calculateTimeRange(courses);
+    const { startHour, endHour } = currentTimeRange;
+    const timeLabels = generateTimeLabels(startHour, endHour);
+    const gridHeight = (endHour - startHour) * PIXELS_PER_HOUR;
 
-    container.innerHTML = `<h3 style="text-align:center; color:#0066cc;">Your Block Schedule (${courses.length} sections found)</h3>`;
+    container.innerHTML = `
+        <h3 class="schedule-title">Your Block Schedule (${courses.length} sections found)</h3>
+    `;
 
+    // Create grid container
     const grid = document.createElement('div');
     grid.className = 'timetable-grid';
-    grid.style.gridTemplateRows = `repeat(${numSlots + 1}, 1fr)`;
-    grid.style.gridTemplateColumns = `100px repeat(${DAYS.length}, 1fr)`;
+    grid.style.setProperty('--grid-height', `${gridHeight}px`);
 
     // Create header row
+    const headerRow = document.createElement('div');
+    headerRow.className = 'grid-header';
+
     const timeHeader = document.createElement('div');
-    timeHeader.className = 'header time-slot';
+    timeHeader.className = 'header-cell time-header';
     timeHeader.textContent = 'Time';
-    grid.appendChild(timeHeader);
+    headerRow.appendChild(timeHeader);
 
     DAYS.forEach(day => {
         const dayHeader = document.createElement('div');
-        dayHeader.className = 'header';
+        dayHeader.className = 'header-cell day-header';
         dayHeader.textContent = day;
-        grid.appendChild(dayHeader);
+        headerRow.appendChild(dayHeader);
     });
+    grid.appendChild(headerRow);
 
-    // Create time labels
-    timeLabels.forEach((label, index) => {
-        const timeCell = document.createElement('div');
-        timeCell.className = 'time-slot';
-        timeCell.textContent = label;
-        timeCell.style.gridRow = index + 2;
-        timeCell.style.gridColumn = 1;
-        grid.appendChild(timeCell);
+    // Create body with time column and day columns
+    const gridBody = document.createElement('div');
+    gridBody.className = 'grid-body';
+
+    // Time labels column
+    const timeColumn = document.createElement('div');
+    timeColumn.className = 'time-column';
+
+    timeLabels.forEach((t, index) => {
+        const timeLabel = document.createElement('div');
+        timeLabel.className = 'time-label';
+        timeLabel.style.top = `${(index / (timeLabels.length - 1)) * 100}%`;
+        timeLabel.textContent = t.label;
+        timeColumn.appendChild(timeLabel);
     });
+    gridBody.appendChild(timeColumn);
 
-    // Add course boxes
-    courses.forEach(course => {
-        course.schedules.forEach(schedule => {
-            const parsed = parseScheduleTime(schedule);
-            if (!parsed) return;
+    // Day columns
+    DAYS.forEach((day, dayIndex) => {
+        const dayColumn = document.createElement('div');
+        dayColumn.className = 'day-column';
+        dayColumn.dataset.day = day;
 
-            const courseDays = parsed.days.split('').map(d => DAY_MAP[d] || '').filter(Boolean);
-            const startSlot = getSlotFromMinutes(parsed.startMin);
-            const endSlot = Math.ceil((parsed.endMin - (START_HOUR * 60)) / SLOT_DURATION) + 2;
+        // Add hour lines
+        for (let h = startHour; h <= endHour; h++) {
+            const line = document.createElement('div');
+            line.className = 'hour-line';
+            const topPercent = ((h - startHour) / (endHour - startHour)) * 100;
+            line.style.top = `${topPercent}%`;
+            dayColumn.appendChild(line);
+        }
 
-            courseDays.forEach(day => {
-                const colIndex = DAYS.indexOf(day) + 2;
-                const box = createCourseBox(course, parsed, startSlot, endSlot, colIndex);
-                grid.appendChild(box);
+        // Add courses for this day
+        courses.forEach(course => {
+            course.schedules.forEach(schedule => {
+                const parsed = parseScheduleTime(schedule);
+                if (!parsed) return;
+
+                const courseDays = parsed.days.split('').map(d => DAY_MAP[d] || '').filter(Boolean);
+                if (!courseDays.includes(day)) return;
+
+                const box = createCourseBox(course, parsed);
+                dayColumn.appendChild(box);
             });
         });
+
+        gridBody.appendChild(dayColumn);
     });
 
+    grid.appendChild(gridBody);
     container.appendChild(grid);
+
     document.getElementById('scheduleControls').style.display = 'block';
     document.querySelector('section').style.display = 'block';
 }
@@ -300,7 +354,7 @@ function showSuggestedCourses(codes) {
     container.innerHTML = '';
 
     if (codes.length === 0) {
-        container.innerHTML = '<em style="color:green;">All required courses found in your schedule!</em>';
+        container.innerHTML = '<em class="all-found-msg">All required courses found in your schedule!</em>';
         return;
     }
 
@@ -312,7 +366,15 @@ function showSuggestedCourses(codes) {
     });
 }
 
-// Show section choices in modal
+// Format day codes to readable text
+function formatDays(days) {
+    const dayNames = {
+        U: 'Sun', M: 'Mon', T: 'Tue', W: 'Wed', R: 'Thu'
+    };
+    return days.split('').map(d => dayNames[d] || d).join(', ');
+}
+
+// Show section choices in modal with improved info display
 async function showSectionChoices(code) {
     const gender = document.getElementById('gender').value;
     const modal = document.getElementById('modal');
@@ -322,7 +384,7 @@ async function showSectionChoices(code) {
     if (!modal || !titleSpan || !list) return;
 
     titleSpan.textContent = code;
-    list.innerHTML = '<p>Loading sections...</p>';
+    list.innerHTML = '<p class="loading-msg">Loading sections...</p>';
     modal.style.display = 'flex';
 
     try {
@@ -339,29 +401,60 @@ async function showSectionChoices(code) {
         list.innerHTML = '';
 
         if (result.data.length === 0) {
-            list.innerHTML = '<p>No sections found for this course.</p>';
+            list.innerHTML = '<p class="no-results-msg">No sections found for this course.</p>';
             return;
         }
 
         result.data.forEach(course => {
-            const div = document.createElement('div');
-            div.style.marginBottom = '15px';
-            div.style.padding = '10px';
-            div.style.border = '1px solid #ddd';
-            div.style.borderRadius = '4px';
+            const card = document.createElement('div');
+            card.className = 'section-card';
 
-            let schedulesText = course.schedules.map(s =>
-                `${s.days} ${s.time} (${s.room || 'TBA'})`
-            ).join('<br>');
+            // Section header
+            const header = document.createElement('div');
+            header.className = 'section-header';
+            header.innerHTML = `<span class="section-number">Section ${course.section || '??'}</span>`;
+            card.appendChild(header);
 
-            div.innerHTML = `
-                <strong>Section ${course.section || '??'} - ${course.primaryInstructor || 'TBA'}</strong><br>
-                ${schedulesText}
+            // Section details
+            const details = document.createElement('div');
+            details.className = 'section-details';
+
+            // Schedule info for each time slot
+            course.schedules.forEach(sched => {
+                const schedRow = document.createElement('div');
+                schedRow.className = 'schedule-row';
+                schedRow.innerHTML = `
+                    <div class="detail-row">
+                        <span class="detail-label">📅 Days:</span>
+                        <span class="detail-value">${formatDays(sched.days)}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">🕐 Time:</span>
+                        <span class="detail-value">${sched.time}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">📍 Location:</span>
+                        <span class="detail-value">${sched.room || 'TBA'}</span>
+                    </div>
+                `;
+                details.appendChild(schedRow);
+            });
+
+            // Instructor
+            const instructorRow = document.createElement('div');
+            instructorRow.className = 'detail-row instructor-row';
+            instructorRow.innerHTML = `
+                <span class="detail-label">👨‍🏫 Instructor:</span>
+                <span class="detail-value">${course.primaryInstructor || 'TBA'}</span>
             `;
+            details.appendChild(instructorRow);
 
+            card.appendChild(details);
+
+            // Add button
             const addBtn = document.createElement('button');
-            addBtn.textContent = 'Add this section';
-            addBtn.className = 'add-section';
+            addBtn.textContent = 'ADD THIS SECTION';
+            addBtn.className = 'add-section-btn';
             addBtn.onclick = async () => {
                 const conflict = hasConflict(course);
                 if (conflict) {
@@ -370,51 +463,49 @@ async function showSectionChoices(code) {
                         `This course overlaps with "${conflict}". Remove "${conflict}" and add this course instead?`
                     );
                     if (!confirmed) return;
-                    // Remove the conflicting course before adding new one
                     removeConflictingCourse(conflict);
                 }
                 addCourseToGrid(course);
                 modal.style.display = 'none';
-                // Update suggestions after adding
                 updateSuggestedCourses();
             };
+            card.appendChild(addBtn);
 
-            div.appendChild(addBtn);
-            list.appendChild(div);
+            list.appendChild(card);
         });
 
     } catch (error) {
-        list.innerHTML = '<p>Error loading sections.</p>';
+        list.innerHTML = '<p class="error-msg">Error loading sections. Please try again.</p>';
     }
 }
 
 // Add course to existing grid
 function addCourseToGrid(course) {
-    const grid = document.querySelector('.timetable-grid');
-    if (!grid) return;
+    const gridBody = document.querySelector('.grid-body');
+    if (!gridBody) return;
 
     course.schedules.forEach(schedule => {
         const parsed = parseScheduleTime(schedule);
         if (!parsed) return;
 
         const courseDays = parsed.days.split('').map(d => DAY_MAP[d] || '').filter(Boolean);
-        const startSlot = getSlotFromMinutes(parsed.startMin);
-        const endSlot = Math.ceil((parsed.endMin - (START_HOUR * 60)) / SLOT_DURATION) + 2;
 
         courseDays.forEach(day => {
-            const colIndex = DAYS.indexOf(day) + 2;
-            const box = createCourseBox(course, parsed, startSlot, endSlot, colIndex, true);
-            grid.appendChild(box);
+            const dayColumn = gridBody.querySelector(`.day-column[data-day="${day}"]`);
+            if (dayColumn) {
+                const box = createCourseBox(course, parsed, true);
+                dayColumn.appendChild(box);
+            }
         });
     });
 }
 
-// Check for time conflicts with existing courses
+// Check for time conflicts
 function hasConflict(newCourse) {
-    const grid = document.querySelector('.timetable-grid');
-    if (!grid) return null;
+    const gridBody = document.querySelector('.grid-body');
+    if (!gridBody) return null;
 
-    const existingBoxes = grid.querySelectorAll('.course-box');
+    const existingBoxes = gridBody.querySelectorAll('.course-box');
 
     for (const sched of newCourse.schedules) {
         const parsed = parseScheduleTime(sched);
@@ -429,11 +520,9 @@ function hasConflict(newCourse) {
 
             if (isNaN(existingStart) || isNaN(existingEnd)) continue;
 
-            // Check if any days overlap
             const daysOverlap = newDays.some(d => existingDays.includes(d));
             if (!daysOverlap) continue;
 
-            // Check if times overlap
             if (timeRangesOverlap(parsed.startMin, parsed.endMin, existingStart, existingEnd)) {
                 return box.dataset.courseCode;
             }
@@ -442,20 +531,17 @@ function hasConflict(newCourse) {
     return null;
 }
 
-// Remove all instances of a conflicting course from the grid
+// Remove conflicting course
 function removeConflictingCourse(courseCode) {
-    const grid = document.querySelector('.timetable-grid');
-    if (!grid) return;
+    const gridBody = document.querySelector('.grid-body');
+    if (!gridBody) return;
 
-    const boxes = grid.querySelectorAll('.course-box');
-    boxes.forEach(box => {
-        if (box.dataset.courseCode === courseCode) {
-            box.remove();
-        }
+    gridBody.querySelectorAll('.course-box').forEach(box => {
+        if (box.dataset.courseCode === courseCode) box.remove();
     });
 }
 
-// Set loading state on submit button
+// Set loading state
 function setLoadingState(loading) {
     const submitBtn = document.querySelector('#blockForm button[type="submit"]');
     if (submitBtn) {
@@ -464,10 +550,10 @@ function setLoadingState(loading) {
     }
 }
 
-// Initialize all event listeners when DOM is ready
+// Initialize event listeners
 document.addEventListener('DOMContentLoaded', () => {
 
-    // Major selection updates block options
+    // Major selection
     document.getElementById('major')?.addEventListener('change', function () {
         const major = this.value;
         currentMajor = major;
@@ -512,9 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setLoadingState(true);
 
         const container = document.getElementById('timetableContainer');
-        if (container) {
-            container.innerHTML = '<p>Loading your block schedule...</p>';
-        }
+        if (container) container.innerHTML = '<p class="loading-msg">Loading your block schedule...</p>';
 
         try {
             const apiUrl = new URL('https://api.kauindex.com/search');
@@ -524,20 +608,13 @@ document.addEventListener('DOMContentLoaded', () => {
             apiUrl.searchParams.append('level', 'بكالوريوس');
             apiUrl.searchParams.append('limit', '100');
 
-            console.log("Fetching from:", apiUrl.toString());
-
             const response = await fetch(apiUrl);
-
-            if (!response.ok) {
-                throw new Error(`API error: ${response.status}`);
-            }
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
 
             const result = await response.json();
 
             if (result.status !== 'success' || !result.data || result.data.length === 0) {
-                if (container) {
-                    container.innerHTML = '<p>No courses found for this block. Try another?</p>';
-                }
+                if (container) container.innerHTML = '<p class="no-results-msg">No courses found for this block. Try another?</p>';
                 setLoadingState(false);
                 return;
             }
@@ -559,15 +636,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error(error);
-            if (container) {
-                container.innerHTML = '<p>Error loading schedule. Check console or try again later.</p>';
-            }
+            if (container) container.innerHTML = '<p class="error-msg">Error loading schedule. Check console or try again later.</p>';
         } finally {
             setLoadingState(false);
         }
     });
 
-    // Manual course search button
+    // Manual course search
     document.getElementById('fetchBtn')?.addEventListener('click', () => {
         const input = document.getElementById('courseInput');
         const code = input?.value.trim().toUpperCase();
@@ -577,7 +652,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Allow Enter key in search input
+    // Enter key in search
     document.getElementById('courseInput')?.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -585,7 +660,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Clear schedule button - only removes course boxes, keeps grid
+    // Clear schedule
     document.getElementById('clearScheduleBtn')?.addEventListener('click', async () => {
         const courseBoxes = document.querySelectorAll('.course-box');
         if (courseBoxes.length === 0) return;
@@ -597,7 +672,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (confirmed) {
             courseBoxes.forEach(box => box.remove());
-            // Update suggestions to show all required/suggested courses again
             updateSuggestedCourses();
         }
     });
