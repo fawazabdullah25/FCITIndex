@@ -367,9 +367,11 @@ async function showSectionChoices(code) {
                 if (conflict) {
                     const confirmed = await showConfirmModal(
                         '⚠️ Time Conflict',
-                        `This course overlaps with "${conflict}". Add anyway?`
+                        `This course overlaps with "${conflict}". Remove "${conflict}" and add this course instead?`
                     );
                     if (!confirmed) return;
+                    // Remove the conflicting course before adding new one
+                    removeConflictingCourse(conflict);
                 }
                 addCourseToGrid(course);
                 modal.style.display = 'none';
@@ -438,6 +440,19 @@ function hasConflict(newCourse) {
         }
     }
     return null;
+}
+
+// Remove all instances of a conflicting course from the grid
+function removeConflictingCourse(courseCode) {
+    const grid = document.querySelector('.timetable-grid');
+    if (!grid) return;
+
+    const boxes = grid.querySelectorAll('.course-box');
+    boxes.forEach(box => {
+        if (box.dataset.courseCode === courseCode) {
+            box.remove();
+        }
+    });
 }
 
 // Set loading state on submit button

@@ -506,15 +506,13 @@ section {
     color: var(--danger);
     border: 1px solid var(--danger);
     border-radius: 50%;
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     font-size: 12px;
     font-weight: bold;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
+    text-align: center;
+    line-height: 16px;
     padding: 0;
     transition: all 0.3s ease;
 }
