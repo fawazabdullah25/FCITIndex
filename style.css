@@ -380,34 +380,53 @@ section {
     gap: 15px;
 }
 
-#courseInput {
-    padding: 14px 24px;
-    font-size: 15px;
-    width: 400px;
-    max-width: 60%;
+.search-pill {
+    display: flex;
+    align-items: stretch;
     background: var(--bg-input);
     border: 2px solid var(--border-color);
-    border-radius: 30px;
+    border-radius: 50px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.search-pill:focus-within {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 20px var(--accent-glow);
+}
+
+#courseInput {
+    flex: 1;
+    padding: 12px 20px;
+    font-size: 14px;
+    background: transparent;
+    border: none;
     color: var(--text-primary);
     outline: none;
-    flex: 1;
-    transition: all 0.3s ease;
+    min-width: 0;
 }
 
 #courseInput::placeholder {
     color: var(--text-muted);
 }
 
-#courseInput:focus {
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 20px var(--accent-glow);
+#fetchBtn {
+    padding: 12px 20px;
+    font-size: 14px;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    color: var(--bg-primary);
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: all 0.3s ease;
 }
 
-#fetchBtn {
-    padding: 14px 24px;
-    font-size: 13px;
-    width: auto;
-    min-width: 120px;
+#fetchBtn:hover {
+    filter: brightness(1.1);
 }
 
 /* ==========================================
@@ -728,4 +747,110 @@ section {
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--accent-secondary);
+}
+
+/* ==========================================
+   Mobile Responsive
+   ========================================== */
+
+@media (max-width: 768px) {
+    body {
+        padding: 20px;
+    }
+
+    .main-heading {
+        font-size: 1.5rem;
+    }
+
+    main {
+        padding: 20px;
+    }
+
+    form {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    button {
+        width: 100%;
+    }
+
+    section {
+        padding: 20px;
+    }
+
+    /* Grid header cells - smaller on mobile */
+    .header-cell {
+        padding: 10px 5px;
+        font-size: 11px;
+    }
+
+    .time-header {
+        flex: 0 0 45px;
+    }
+
+    .time-column {
+        flex: 0 0 45px;
+    }
+
+    .time-label {
+        font-size: 9px;
+        padding: 2px 3px;
+    }
+
+    /* Course boxes - more compact on mobile */
+    .course-box {
+        padding: 3px 4px;
+        padding-top: 14px;
+        font-size: 8px;
+        border-left-width: 3px;
+    }
+
+    .course-box .remove-btn {
+        width: 14px;
+        height: 14px;
+        font-size: 10px;
+    }
+
+    /* Suggested course buttons - prevent overflow */
+    #suggestedButtons {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    #suggestedButtons button {
+        padding: 8px 16px;
+        font-size: 12px;
+        width: auto;
+        flex-shrink: 0;
+    }
+
+    /* Control buttons - fit container */
+    #clearScheduleBtn {
+        padding: 10px 20px;
+        font-size: 13px;
+        max-width: 100%;
+    }
+
+    /* Search pill - responsive */
+    .search-pill {
+        max-width: 100%;
+    }
+
+    #courseInput {
+        padding: 10px 15px;
+        font-size: 13px;
+    }
+
+    #fetchBtn {
+        padding: 10px 15px;
+        font-size: 13px;
+    }
+
+    /* Modal adjustments */
+    .modal-content {
+        width: 95%;
+        padding: 20px;
+        max-height: 90%;
+    }
 }

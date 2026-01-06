@@ -66,7 +66,9 @@ const alwaysSuggested = {
 
 // Grid configuration
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
+const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu'];
 const DAY_MAP = { U: 'Sunday', M: 'Monday', T: 'Tuesday', W: 'Wednesday', R: 'Thursday' };
+const isMobile = () => window.innerWidth <= 768;
 const PIXELS_PER_HOUR = 80; // Height pixels per hour (increased for more space)
 const TIME_PADDING_HOURS = 1; // Padding before earliest and after latest course
 
@@ -282,10 +284,14 @@ function displayCourses(courses) {
     timeHeader.textContent = 'Time';
     headerRow.appendChild(timeHeader);
 
-    DAYS.forEach(day => {
+    // Use abbreviated day names on mobile
+    const dayNames = isMobile() ? DAYS_SHORT : DAYS;
+
+    DAYS.forEach((day, index) => {
         const dayHeader = document.createElement('div');
         dayHeader.className = 'header-cell day-header';
-        dayHeader.textContent = day;
+        dayHeader.textContent = dayNames[index];
+        dayHeader.dataset.day = day; // Keep full name for data reference
         headerRow.appendChild(dayHeader);
     });
     grid.appendChild(headerRow);
