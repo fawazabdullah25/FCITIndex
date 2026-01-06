@@ -6,7 +6,7 @@ const blocksByMajor = {
 
 const termSubjects = {
     CS: {
-        4: ['CPCS-203', 'CPCS-222', 'MATH-202'],
+        4: ['CPCS-203', 'CPCS-222'],
         5: ['CPCS-204', 'CPCS-211', 'CPCS-212'],
         6: ['CPCS-214', 'CPCS-223', 'CPCS-241', 'CPCS-301'],
         7: ['CPCS-324', 'CPCS-351', 'CPCS-331', 'CPCS-361', 'CPCS-371'],
@@ -36,7 +36,7 @@ const termSubjects = {
 
 const alwaysSuggested = {
     CS: {
-        4: ['ARAB-101', 'ISLS-201'],
+        4: ['ARAB-101', 'ISLS-201', 'MATH-202'],
         5: ['PHYS-202', 'CHEM-202', 'BIO-202', 'BIOC-371'],
         6: ['STAT-352'],
         7: ['CPIS-334'],
@@ -68,6 +68,7 @@ const alwaysSuggested = {
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
 const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu'];
 const DAY_MAP = { U: 'Sunday', M: 'Monday', T: 'Tuesday', W: 'Wednesday', R: 'Thursday' };
+const DAY_ORDER = { U: 0, M: 1, T: 2, W: 3, R: 4 }; // For sorting days in UMTWR order
 const isMobile = () => window.innerWidth <= 768;
 const PIXELS_PER_HOUR = 80; // Height pixels per hour (increased for more space)
 const TIME_PADDING_HOURS = 1; // Padding before earliest and after latest course
@@ -339,7 +340,11 @@ function displayCourses(courses) {
                 const parsed = parseScheduleTime(schedule);
                 if (!parsed) return;
 
-                const courseDays = parsed.days.split('').map(d => DAY_MAP[d] || '').filter(Boolean);
+                // Sort days in UMTWR order
+                const sortedDays = parsed.days.split('')
+                    .sort((a, b) => (DAY_ORDER[a] ?? 99) - (DAY_ORDER[b] ?? 99))
+                    .join('');
+                const courseDays = sortedDays.split('').map(d => DAY_MAP[d] || '').filter(Boolean);
                 if (!courseDays.includes(day)) return;
 
                 const box = createCourseBox(course, parsed);
@@ -354,8 +359,111 @@ function displayCourses(courses) {
     grid.appendChild(gridBody);
     container.appendChild(grid);
 
+    // Generate mobile schedule list view (card-based)
+    generateMobileScheduleList(courses, container);
+
+    // Show schedule controls and suggestions, hide form
     document.getElementById('scheduleControls').style.display = 'block';
     document.querySelector('section').style.display = 'block';
+    document.querySelector('main').style.display = 'none';
+}
+
+// Generate mobile-friendly card-based schedule list
+function generateMobileScheduleList(courses, container) {
+    // Remove existing mobile list if any
+    const existingList = container.querySelector('.mobile-schedule-list');
+    if (existingList) existingList.remove();
+
+    const mobileList = document.createElement('div');
+    mobileList.className = 'mobile-schedule-list';
+
+    // Group courses by day
+    const coursesByDay = {};
+    DAYS.forEach(day => coursesByDay[day] = []);
+
+    courses.forEach(course => {
+        course.schedules.forEach(sched => {
+            const parsed = parseScheduleTime(sched);
+            if (!parsed) return;
+
+            const sortedDays = parsed.days.split('')
+                .sort((a, b) => (DAY_ORDER[a] ?? 99) - (DAY_ORDER[b] ?? 99));
+
+            sortedDays.forEach(dayCode => {
+                const dayName = DAY_MAP[dayCode];
+                if (dayName && coursesByDay[dayName]) {
+                    coursesByDay[dayName].push({
+                        course,
+                        schedule: sched,
+                        time: parsed.time || sched.time
+                    });
+                }
+            });
+        });
+    });
+
+    // Generate cards for each day
+    DAYS.forEach(day => {
+        const dayCourses = coursesByDay[day];
+        if (dayCourses.length === 0) return;
+
+        const dayGroup = document.createElement('div');
+        dayGroup.className = 'mobile-day-group';
+
+        const dayHeader = document.createElement('div');
+        dayHeader.className = 'mobile-day-header';
+        dayHeader.textContent = day;
+        dayGroup.appendChild(dayHeader);
+
+        // Sort by start time
+        dayCourses.sort((a, b) => {
+            const aTime = a.schedule.time?.split(' - ')[0] || '';
+            const bTime = b.schedule.time?.split(' - ')[0] || '';
+            return aTime.localeCompare(bTime);
+        });
+
+        dayCourses.forEach(({ course, schedule }) => {
+            const card = document.createElement('div');
+            card.className = 'mobile-course-card';
+            card.dataset.courseCode = `${course.subject} ${course.courseCode}`;
+
+            card.innerHTML = `
+                <span class="section-badge">${course.section || '??'}</span>
+                <div class="course-code">${course.subject} ${course.courseCode}</div>
+                <div class="course-title">${course.title || ''}</div>
+                <div class="course-meta">
+                    <span>🕐 ${schedule.time || 'TBA'}</span>
+                    <span>📍 ${schedule.room || 'TBA'}</span>
+                </div>
+                <button class="remove-mobile-btn" title="Remove">✕ Remove</button>
+            `;
+
+            card.querySelector('.remove-mobile-btn').onclick = async (e) => {
+                e.stopPropagation();
+                const courseName = `${course.subject} ${course.courseCode}`;
+                const confirmed = await showConfirmModal(
+                    'Remove Course',
+                    `Remove ${courseName} from your schedule?`
+                );
+                if (confirmed) {
+                    // Remove from both grid and mobile list
+                    document.querySelectorAll('.course-box').forEach(b => {
+                        if (b.dataset.courseCode === courseName) b.remove();
+                    });
+                    document.querySelectorAll('.mobile-course-card').forEach(c => {
+                        if (c.dataset.courseCode === courseName) c.remove();
+                    });
+                    updateSuggestedCourses();
+                }
+            };
+
+            dayGroup.appendChild(card);
+        });
+
+        mobileList.appendChild(dayGroup);
+    });
+
+    container.appendChild(mobileList);
 }
 
 // Show suggested course buttons
@@ -378,12 +486,15 @@ function showSuggestedCourses(codes) {
     });
 }
 
-// Format day codes to readable text
+// Format day codes to readable text (sorted in UMTWR order)
 function formatDays(days) {
     const dayNames = {
         U: 'Sun', M: 'Mon', T: 'Tue', W: 'Wed', R: 'Thu'
     };
-    return days.split('').map(d => dayNames[d] || d).join(', ');
+    // Sort days in UMTWR order before formatting
+    const sortedDays = days.split('')
+        .sort((a, b) => (DAY_ORDER[a] ?? 99) - (DAY_ORDER[b] ?? 99));
+    return sortedDays.map(d => dayNames[d] || d).join(', ');
 }
 
 // Show section choices in modal with improved info display
@@ -392,11 +503,20 @@ async function showSectionChoices(code) {
     const modal = document.getElementById('modal');
     const titleSpan = document.getElementById('modalTitle')?.querySelector('span');
     const list = document.getElementById('sectionList');
+    const filtersPanel = document.getElementById('filtersPanel');
 
     if (!modal || !titleSpan || !list) return;
 
     titleSpan.textContent = code;
     list.innerHTML = '<p class="loading-msg">Loading sections...</p>';
+
+    // Reset and hide filters
+    if (filtersPanel) filtersPanel.style.display = 'none';
+    document.getElementById('filterInstructor').value = '';
+    document.getElementById('filterSection').value = '';
+    document.getElementById('filterDay').value = '';
+    document.getElementById('filterStartTime').value = '';
+
     modal.style.display = 'flex';
 
     try {
@@ -420,6 +540,21 @@ async function showSectionChoices(code) {
         result.data.forEach(course => {
             const card = document.createElement('div');
             card.className = 'section-card';
+
+            // Add data attributes for filtering
+            const schedDays = course.schedules.map(s => s.days || '').join('');
+            const schedStartTime = course.schedules[0]?.time?.split(' - ')[0] || '';
+            const schedTimeValue = schedStartTime.replace(/(\d{1,2}):(\d{2}) ([AP]M)/, (_, h, m, ap) => {
+                let hour = parseInt(h);
+                if (ap === 'PM' && hour !== 12) hour += 12;
+                if (ap === 'AM' && hour === 12) hour = 0;
+                return `${hour.toString().padStart(2, '0')}:${m}`;
+            });
+
+            card.dataset.instructor = course.schedules[0]?.instructor || course.primaryInstructor || '';
+            card.dataset.section = course.section || '';
+            card.dataset.days = schedDays;
+            card.dataset.startTime = schedTimeValue;
 
             // Section header
             const header = document.createElement('div');
@@ -607,6 +742,68 @@ function setLoadingState(loading) {
 // Initialize event listeners
 document.addEventListener('DOMContentLoaded', () => {
 
+    // Theme toggle
+    const themeToggle = document.getElementById('themeToggle');
+    const themeIcon = themeToggle?.querySelector('.theme-icon');
+
+    // Initialize theme from localStorage
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'light') {
+        document.body.setAttribute('data-theme', 'light');
+        if (themeIcon) themeIcon.textContent = '🌙';
+    }
+
+    themeToggle?.addEventListener('click', () => {
+        const isLight = document.body.getAttribute('data-theme') === 'light';
+        if (isLight) {
+            document.body.removeAttribute('data-theme');
+            localStorage.setItem('theme', 'dark');
+            if (themeIcon) themeIcon.textContent = '☀️';
+        } else {
+            document.body.setAttribute('data-theme', 'light');
+            localStorage.setItem('theme', 'light');
+            if (themeIcon) themeIcon.textContent = '🌙';
+        }
+    });
+
+    // Filter toggle in modal
+    document.getElementById('filterToggle')?.addEventListener('click', () => {
+        const panel = document.getElementById('filtersPanel');
+        if (panel) {
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+    });
+
+    // Filter functionality - filter section cards as user types/selects
+    function applyFilters() {
+        const instructorFilter = document.getElementById('filterInstructor')?.value.toLowerCase() || '';
+        const sectionFilter = document.getElementById('filterSection')?.value.toUpperCase() || '';
+        const dayFilter = document.getElementById('filterDay')?.value || '';
+        const startTimeFilter = document.getElementById('filterStartTime')?.value || '';
+
+        document.querySelectorAll('.section-card').forEach(card => {
+            const instructor = card.dataset.instructor?.toLowerCase() || '';
+            const section = card.dataset.section?.toUpperCase() || '';
+            const days = card.dataset.days || '';
+            const startTime = card.dataset.startTime || '';
+
+            let show = true;
+
+            if (instructorFilter && !instructor.includes(instructorFilter)) show = false;
+            if (sectionFilter && !section.includes(sectionFilter)) show = false;
+            if (dayFilter && !days.includes(dayFilter)) show = false;
+            if (startTimeFilter && startTime < startTimeFilter) show = false;
+
+            card.style.display = show ? 'block' : 'none';
+        });
+    }
+
+    // Attach filter event listeners
+    ['filterInstructor', 'filterSection', 'filterDay', 'filterStartTime'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', applyFilters);
+        document.getElementById(id)?.addEventListener('change', applyFilters);
+    });
+
     // Major selection
     document.getElementById('major')?.addEventListener('change', function () {
         const major = this.value;
@@ -623,6 +820,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 option.textContent = block;
                 blockSelect.appendChild(option);
             });
+        }
+    });
+
+    // Year selection - populate term dropdown
+    document.getElementById('year')?.addEventListener('change', function () {
+        const year = parseInt(this.value);
+        const termSelect = document.getElementById('term');
+        if (!termSelect) return;
+
+        termSelect.innerHTML = '<option value="">Select Term</option>';
+
+        if (year === 2) {
+            // Year 2 only has Term 2 (which is internal term 4)
+            termSelect.innerHTML += '<option value="4">Term 2 (First in Major)</option>';
+        } else if (year >= 3 && year <= 5) {
+            // Years 3-5 have Term 1 and Term 2
+            const baseTermValue = (year - 3) * 2 + 5; // Year 3 = 5,6; Year 4 = 7,8; Year 5 = 9,10
+            termSelect.innerHTML += `<option value="${baseTermValue}">Term 1</option>`;
+            termSelect.innerHTML += `<option value="${baseTermValue + 1}">Term 2</option>`;
         }
     });
 
@@ -714,19 +930,36 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Clear schedule
+    // Reset schedule (always resets even when no courses)
     document.getElementById('clearScheduleBtn')?.addEventListener('click', async () => {
         const courseBoxes = document.querySelectorAll('.course-box');
-        if (courseBoxes.length === 0) return;
 
-        const confirmed = await showConfirmModal(
-            'Clear Schedule',
-            'Are you sure you want to remove all courses from your schedule?'
-        );
-
-        if (confirmed) {
-            courseBoxes.forEach(box => box.remove());
-            updateSuggestedCourses();
+        // Only show confirmation if there are courses to remove
+        if (courseBoxes.length > 0) {
+            const confirmed = await showConfirmModal(
+                'Reset Schedule',
+                'Are you sure you want to reset and start over?'
+            );
+            if (!confirmed) return;
         }
+
+        // Remove all courses
+        courseBoxes.forEach(box => box.remove());
+
+        // Hide schedule and suggestions, show form
+        document.getElementById('timetableContainer').innerHTML = '';
+        document.getElementById('scheduleControls').style.display = 'none';
+        document.querySelector('section').style.display = 'none';
+        document.querySelector('main').style.display = 'block';
+
+        // Reset form selections
+        document.getElementById('year').value = '';
+        document.getElementById('term').innerHTML = '<option value="">Term</option>';
+        document.getElementById('major').value = '';
+        document.getElementById('block').innerHTML = '<option value="">Select Block</option>';
+
+        currentMajor = null;
+        currentTerm = null;
+        currentSuggestions = [];
     });
 });
