@@ -93,8 +93,8 @@ body {
 /* Theme toggle button */
 .theme-toggle {
     position: absolute;
-    top: 20px;
-    right: 20px;
+    top: 10px;
+    right: 10px;
     background: var(--bg-card);
     border: 2px solid var(--border-color);
     border-radius: 50%;
@@ -169,7 +169,7 @@ label {
 }
 
 select {
-    padding: 12px 15px;
+    padding: 12px 35px 12px 15px;
     font-size: 15px;
     width: 100%;
     background: var(--bg-input);
@@ -450,8 +450,8 @@ section {
     border-radius: 50px;
     overflow: hidden;
     transition: all 0.3s ease;
-    max-width: 500px;
-    margin: 0 auto;
+    width: 100%;
+    max-width: 100%;
 }
 
 .search-pill:focus-within {
@@ -517,11 +517,16 @@ section {
     max-width: 600px;
     width: 90%;
     max-height: 80%;
-    overflow-y: auto;
+    overflow: hidden;
     border: 1px solid var(--accent-primary);
     box-shadow: 0 10px 50px rgba(0, 212, 255, 0.2);
     display: flex;
     flex-direction: column;
+}
+
+.modal-sections-container {
+    overflow-y: auto;
+    flex: 1;
 }
 
 .modal-header {
@@ -1031,26 +1036,34 @@ input[type="time"] {
 
 .mobile-day-group {
     margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--bg-card);
 }
 
 .mobile-day-header {
     font-size: 14px;
     font-weight: 700;
     color: var(--text-primary);
-    padding: 8px 12px;
-    background: var(--bg-secondary);
-    border-radius: 8px;
-    margin-bottom: 10px;
+    padding: 10px 15px;
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    border-radius: 12px 12px 0 0;
 }
 
 .mobile-course-card {
     background: var(--course-box-bg);
     border-left: 4px solid var(--course-box-border);
-    border-radius: 8px;
     padding: 12px 15px;
-    padding-bottom: 40px;
-    margin-bottom: 10px;
+    padding-bottom: 45px;
     position: relative;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.mobile-course-card:last-child {
+    border-bottom: none;
+    border-radius: 0 0 8px 8px;
 }
 
 .mobile-course-card .section-badge {
@@ -1081,27 +1094,30 @@ input[type="time"] {
 
 .mobile-course-card .course-meta {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    font-size: 11px;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
     color: var(--text-secondary);
 }
 
-.mobile-course-card .course-meta span {
+.mobile-course-card .course-meta .meta-row {
     display: flex;
     align-items: center;
-    gap: 4px;
 }
 
 .mobile-course-card .remove-mobile-btn {
     position: absolute;
-    bottom: 0px;
-    right: 0px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
     background: var(--danger);
     color: white;
     border: none;
-    border-radius: 4px;
-    padding: 4px 8px;
-    font-size: 10px;
+    border-radius: 0 0 0 8px;
+    padding: 8px;
+    font-size: 11px;
+    font-weight: 600;
     cursor: pointer;
+    text-transform: uppercase;
 }

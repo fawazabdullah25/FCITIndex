@@ -233,7 +233,7 @@ function createCourseBox(course, schedule, isManual = false) {
     box.innerHTML = `
         <button class="remove-btn" title="Remove course">×</button>
         <div class="course-code">${course.subject} ${course.courseCode}</div>
-        <div class="course-title">${course.title}</div>
+        <div class="course-section">Section ${course.section || '?'}</div>
         <div class="course-info">${schedule.room || 'TBA'}</div>
         <div class="course-instructor">${schedule.instructor || course.primaryInstructor || 'TBA'}</div>
     `;
@@ -432,10 +432,12 @@ function generateMobileScheduleList(courses, container) {
                 <div class="course-code">${course.subject} ${course.courseCode}</div>
                 <div class="course-title">${course.title || ''}</div>
                 <div class="course-meta">
-                    <span>🕐 ${schedule.time || 'TBA'}</span>
-                    <span>📍 ${schedule.room || 'TBA'}</span>
+                    <div class="meta-row">🕐 ${schedule.time || 'TBA'}</div>
+                    <div class="meta-row">📍 ${schedule.room || 'TBA'}</div>
+                    <div class="meta-row">👨‍🏫 ${schedule.instructor || course.primaryInstructor || 'TBA'}</div>
+                    ${course.credits ? `<div class="meta-row">📚 ${course.credits} Credits</div>` : ''}
                 </div>
-                <button class="remove-mobile-btn" title="Remove">✕ Remove</button>
+                <button class="remove-mobile-btn" title="Remove">✕ REMOVE</button>
             `;
 
             card.querySelector('.remove-mobile-btn').onclick = async (e) => {
@@ -587,6 +589,11 @@ async function showSectionChoices(code) {
                         <span class="detail-label">👨‍🏫 Instructor:</span>
                         <span class="detail-value">${sched.instructor || course.primaryInstructor || 'TBA'}</span>
                     </div>
+                    ${course.credits ? `<div class="detail-row">
+                        <span class="detail-label">📚 Credits:</span>
+                        <span class="detail-value">${course.credits}</span>
+                    </div>` : ''}
+                    </div>
                 `;
                 details.appendChild(schedRow);
             });
@@ -687,6 +694,13 @@ function addCourseToGrid(course) {
             }
         });
     });
+
+    // Regenerate mobile schedule list with all current courses
+    const allCourses = getAllCoursesFromGrid();
+    const container = document.getElementById('timetableContainer');
+    if (container) {
+        generateMobileScheduleList(allCourses, container);
+    }
 }
 
 // Check for time conflicts
