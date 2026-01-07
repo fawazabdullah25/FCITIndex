@@ -233,9 +233,13 @@ function createCourseBox(course, schedule, isManual = false) {
     box.innerHTML = `
         <button class="remove-btn" title="Remove course">×</button>
         <div class="course-code">${course.subject} ${course.courseCode}</div>
-        <div class="course-section">Section ${course.section || '?'}</div>
-        <div class="course-info">${schedule.room || 'TBA'}</div>
-        <div class="course-instructor">${schedule.instructor || course.primaryInstructor || 'TBA'}</div>
+        <div class="course-section-line">Sec ${course.section || '?'} | ${course.crn || '??'}</div>
+        <div class="course-hover-details">
+            <div class="detail-item">🕐 ${schedule.time || 'TBA'}</div>
+            <div class="detail-item">📍 ${schedule.room || 'TBA'}</div>
+            <div class="detail-item">👨‍🏫 ${schedule.instructor || course.primaryInstructor || 'TBA'}</div>
+            ${course.credits ? `<div class="detail-item">📚 ${course.credits} Credits</div>` : ''}
+        </div>
     `;
 
     box.querySelector('.remove-btn').onclick = async (e) => {
@@ -286,7 +290,7 @@ function displayCourses(courses) {
     headerRow.appendChild(timeHeader);
 
     // Use abbreviated day names on mobile
-    const dayNames = isMobile() ? DAYS_SHORT : DAYS;
+    const dayNames = DAYS;
 
     DAYS.forEach((day, index) => {
         const dayHeader = document.createElement('div');
@@ -428,7 +432,10 @@ function generateMobileScheduleList(courses, container) {
             card.dataset.courseCode = `${course.subject} ${course.courseCode}`;
 
             card.innerHTML = `
-                <span class="section-badge">${course.section || '??'}</span>
+                <div class="card-badges">
+                    <span class="section-badge">${course.section || '??'}</span>
+                    <span class="crn-badge">${course.crn || '??'}</span>
+                </div>
                 <div class="course-code">${course.subject} ${course.courseCode}</div>
                 <div class="course-title">${course.title || ''}</div>
                 <div class="course-meta">
@@ -558,10 +565,16 @@ async function showSectionChoices(code) {
             card.dataset.days = schedDays;
             card.dataset.startTime = schedTimeValue;
 
-            // Section header
+            // Section header with course name on left, section/CRN on right
             const header = document.createElement('div');
             header.className = 'section-header';
-            header.innerHTML = `<span class="section-number">Section ${course.section || '??'}</span>`;
+            header.innerHTML = `
+                <span class="section-course-name">${course.subject}-${course.courseCode}</span>
+                <span class="section-info-right">
+                    <span class="section-number">Sec ${course.section || '??'}</span>
+                    <span class="section-crn">${course.crn || '??'}</span>
+                </span>
+            `;
             card.appendChild(header);
 
             // Section details
@@ -816,6 +829,19 @@ document.addEventListener('DOMContentLoaded', () => {
     ['filterInstructor', 'filterSection', 'filterDay', 'filterStartTime'].forEach(id => {
         document.getElementById(id)?.addEventListener('input', applyFilters);
         document.getElementById(id)?.addEventListener('change', applyFilters);
+    });
+
+    // Edit mode toggle
+    document.getElementById('editModeToggle')?.addEventListener('click', function () {
+        document.body.classList.toggle('edit-mode');
+        this.classList.toggle('active');
+        this.textContent = document.body.classList.contains('edit-mode') ? '✓ Editing' : '✏️ Edit Mode';
+
+        // Update mobile view - hide empty days
+        document.querySelectorAll('.mobile-day-group').forEach(dayGroup => {
+            const hasCards = dayGroup.querySelectorAll('.mobile-course-card').length > 0;
+            dayGroup.style.display = hasCards ? '' : 'none';
+        });
     });
 
     // Major selection

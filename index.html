@@ -23,6 +23,7 @@
     <div id="schedule">
         <div id="timetableContainer"></div>
         <div id="scheduleControls" style="display:none; margin: 20px 0; text-align: center;">
+            <button id="editModeToggle" class="edit-toggle-btn">✏️ Edit Mode</button>
             <button id="clearScheduleBtn">Reset Schedule</button>
         </div>
     </div>
@@ -46,24 +47,26 @@
                             title="Close">×</button>
                     </div>
                 </div>
-                <div id="filtersPanel" class="filters-panel" style="display: none;">
-                    <div class="filter-row">
-                        <input type="text" id="filterInstructor" placeholder="Instructor name...">
-                        <input type="text" id="filterSection" placeholder="Section (e.g., AB)">
+                <div class="modal-scroll-container">
+                    <div id="filtersPanel" class="filters-panel" style="display: none;">
+                        <div class="filter-row">
+                            <input type="text" id="filterInstructor" placeholder="Instructor name...">
+                            <input type="text" id="filterSection" placeholder="Section (e.g., AB)">
+                        </div>
+                        <div class="filter-row">
+                            <select id="filterDay">
+                                <option value="">Any Day</option>
+                                <option value="U">Sunday</option>
+                                <option value="M">Monday</option>
+                                <option value="T">Tuesday</option>
+                                <option value="W">Wednesday</option>
+                                <option value="R">Thursday</option>
+                            </select>
+                            <input type="time" id="filterStartTime" placeholder="Start after">
+                        </div>
                     </div>
-                    <div class="filter-row">
-                        <select id="filterDay">
-                            <option value="">Any Day</option>
-                            <option value="U">Sunday</option>
-                            <option value="M">Monday</option>
-                            <option value="T">Tuesday</option>
-                            <option value="W">Wednesday</option>
-                            <option value="R">Thursday</option>
-                        </select>
-                        <input type="time" id="filterStartTime" placeholder="Start after">
-                    </div>
+                    <div id="sectionList"></div>
                 </div>
-                <div id="sectionList"></div>
             </div>
         </div>
 

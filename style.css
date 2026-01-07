@@ -178,6 +178,13 @@ select {
     color: var(--text-primary);
     cursor: pointer;
     transition: all 0.3s ease;
+    /* Change form arrow*/
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url('data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
+    background-repeat: no-repeat;
+    background-position: calc(100% - 12px) center;
 }
 
 select:hover {
@@ -352,11 +359,7 @@ section {
     justify-content: center;
 }
 
-.course-box:hover {
-    z-index: 10;
-    box-shadow: 0 4px 20px var(--accent-glow);
-    transform: scale(1.02);
-}
+
 
 .course-code {
     font-weight: 700;
@@ -374,10 +377,117 @@ section {
     text-overflow: ellipsis;
 }
 
+.course-section-line {
+    font-size: 8px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+.course-hover-details {
+    display: none;
+    font-size: 9px;
+}
+
+.course-box:hover {
+    z-index: 100;
+    box-shadow: 0 4px 20px var(--accent-glow);
+    transform: scale(1.5);
+    transform-origin: center center;
+    overflow: visible;
+}
+
+.course-box:hover .course-hover-details {
+    display: block;
+}
+
+.course-box:hover .course-code,
+.course-box:hover .course-section-line {
+    font-size: 8px;
+}
+
+.course-hover-details .detail-item {
+    font-size: 6px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .course-info,
 .course-instructor {
     font-size: 10px;
     color: var(--text-muted);
+}
+
+/* Remove buttons - hidden by default, shown in edit mode */
+.course-box .remove-btn {
+    display: none;
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--danger);
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+body.edit-mode .course-box .remove-btn {
+    display: flex;
+}
+
+body.edit-mode .mobile-course-card .remove-mobile-btn {
+    display: block;
+}
+
+.mobile-course-card .remove-mobile-btn {
+    display: none;
+}
+
+/* Schedule controls container */
+#scheduleControls {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+
+/* Both buttons - equal sizing */
+.edit-toggle-btn,
+#clearScheduleBtn {
+    flex: 0 0 220px;
+    width: 220px;
+    box-sizing: border-box;
+    text-align: center;
+}
+
+.edit-toggle-btn {
+    background: transparent;
+    border: 2px solid var(--accent-primary);
+    color: var(--accent-primary);
+    padding: 12px 30px;
+    font-size: 14px;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.edit-toggle-btn:hover {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 25px var(--accent-glow);
+}
+
+.edit-toggle-btn.active {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
 }
 
 /* ==========================================
@@ -489,6 +599,8 @@ section {
 
 #fetchBtn:hover {
     filter: brightness(1.1);
+    transform: none;
+    box-shadow: none;
 }
 
 /* ==========================================
@@ -524,7 +636,7 @@ section {
     flex-direction: column;
 }
 
-.modal-sections-container {
+.modal-scroll-container {
     overflow-y: auto;
     flex: 1;
 }
@@ -569,6 +681,7 @@ section {
 .filter-toggle-btn:hover {
     border-color: var(--accent-primary);
     background: var(--bg-secondary);
+    transform: scale(1.1);
 }
 
 .filters-panel {
@@ -609,11 +722,6 @@ section {
 }
 
 .modal-close-btn {
-    position: sticky;
-    top: 0;
-    float: right;
-    margin-top: -10px;
-    margin-right: -10px;
     background: rgba(255, 68, 102, 0.9);
     color: white;
     border: 2px solid var(--danger);
@@ -629,7 +737,6 @@ section {
     padding: 0;
     line-height: 1;
     transition: all 0.3s ease;
-    z-index: 110;
 }
 
 .modal-close-btn:hover {
@@ -682,12 +789,38 @@ section {
     background: var(--section-header-bg);
     padding: 15px 20px;
     border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-.section-number {
+.section-course-name {
     font-size: 16px;
     font-weight: 700;
     color: var(--accent-primary);
+}
+
+.section-info-right {
+    display: flex;
+    gap: 8px;
+}
+
+.section-number {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--bg-primary);
+    background: var(--accent-primary);
+    padding: 4px 10px;
+    border-radius: 4px;
+}
+
+.section-crn {
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg-card);
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
 }
 
 .section-details {
@@ -871,7 +1004,6 @@ section {
     color: var(--danger);
     border-radius: 25px;
     font-size: 14px;
-    width: auto;
 }
 
 #clearScheduleBtn:hover {
@@ -974,11 +1106,25 @@ section {
         flex-shrink: 0;
     }
 
-    /* Control buttons - fit container */
+    /* Control buttons - flex container for both buttons */
+    #scheduleControls {
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+    }
+
+    #scheduleControls[style*="block"],
+    #scheduleControls[style*="flex"] {
+        display: flex !important;
+    }
+
+    .edit-toggle-btn,
     #clearScheduleBtn {
         padding: 10px 20px;
         font-size: 13px;
-        max-width: 100%;
+        flex: 1;
+        min-width: 140px;
+        max-width: 200px;
     }
 
     /* Search pill - responsive */
@@ -1066,16 +1212,27 @@ input[type="time"] {
     border-radius: 0 0 8px 8px;
 }
 
-.mobile-course-card .section-badge {
+.mobile-course-card .card-badges {
     position: absolute;
     top: 10px;
     right: 10px;
+    display: flex;
+    gap: 6px;
+}
+
+.mobile-course-card .section-badge,
+.mobile-course-card .crn-badge {
     background: var(--accent-primary);
     color: var(--bg-primary);
     padding: 2px 8px;
     border-radius: 4px;
     font-size: 11px;
     font-weight: 600;
+}
+
+.mobile-course-card .crn-badge {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
 }
 
 .mobile-course-card .course-code {
