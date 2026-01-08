@@ -16,20 +16,19 @@
         </div>
         <h2 class="main-heading">Build Your FCIT Schedule</h2>
         <button id="themeToggle" class="theme-toggle" title="Toggle Light/Dark Mode">
-            <span class="theme-icon">☀️</span>
+            <img src="icons/theme.png" alt="" class="theme-icon">
         </button>
     </header>
 
     <div id="schedule">
         <div id="timetableContainer"></div>
-        <div id="scheduleControls" style="display:none; margin: 20px 0; text-align: center;">
-            <button id="editModeToggle" class="edit-toggle-btn">✏️ Edit Mode</button>
+        <div id="scheduleControls" class="hidden">
             <button id="clearScheduleBtn">Reset Schedule</button>
         </div>
     </div>
 
     <section>
-        <h3>Add Extra Courses</h3>
+        <h3>Add Other Courses</h3>
 
         <div id="suggestions">
             <p>Suggested for your term:</p>
@@ -42,7 +41,9 @@
                 <div class="modal-header">
                     <h3 id="modalTitle">Choose a section for <span></span></h3>
                     <div class="modal-header-buttons">
-                        <button id="filterToggle" class="filter-toggle-btn" title="Toggle Filters">🔍</button>
+                        <button id="filterToggle" class="filter-toggle-btn" title="Toggle Filters">
+                            <img src="icons/search.png" alt="" class="filter-icon">
+                        </button>
                         <button onclick="document.getElementById('modal').style.display='none'" class="modal-close-btn"
                             title="Close">×</button>
                     </div>
@@ -54,15 +55,21 @@
                             <input type="text" id="filterSection" placeholder="Section (e.g., AB)">
                         </div>
                         <div class="filter-row">
-                            <select id="filterDay">
-                                <option value="">Any Day</option>
-                                <option value="U">Sunday</option>
-                                <option value="M">Monday</option>
-                                <option value="T">Tuesday</option>
-                                <option value="W">Wednesday</option>
-                                <option value="R">Thursday</option>
-                            </select>
+                            <input type="text" id="filterCrn" placeholder="CRN">
                             <input type="time" id="filterStartTime" placeholder="Start after">
+                        </div>
+                        <div class="filter-row day-checkboxes">
+                            <label><input type="checkbox" name="filterDay" value="U"> Sun</label>
+                            <label><input type="checkbox" name="filterDay" value="M"> Mon</label>
+                            <label><input type="checkbox" name="filterDay" value="T"> Tue</label>
+                            <label><input type="checkbox" name="filterDay" value="W"> Wed</label>
+                            <label><input type="checkbox" name="filterDay" value="R"> Thu</label>
+                        </div>
+                        <div class="filter-row">
+                            <label class="conflict-toggle">
+                                <input type="checkbox" id="filterConflict">
+                                <span>Hide Conflicting Sections</span>
+                            </label>
                         </div>
                     </div>
                     <div id="sectionList"></div>
@@ -76,7 +83,7 @@
                 <h3 id="confirmTitle">Confirm Action</h3>
                 <p id="confirmMessage"></p>
                 <div class="confirm-buttons">
-                    <button id="confirmYes" class="confirm-yes-btn">Yes, Remove</button>
+                    <button id="confirmYes" class="confirm-yes-btn">Yes</button>
                     <button id="confirmNo" class="confirm-no-btn">Cancel</button>
                 </div>
             </div>
@@ -85,7 +92,9 @@
         <div class="search-container">
             <div class="search-pill">
                 <input type="text" id="courseInput" placeholder="Search for any course (e.g., MATH-202)">
-                <button id="fetchBtn" title="Search">🔍</button>
+                <button id="fetchBtn" title="Search">
+                    <img src="icons/search.png" alt="" class="search-icon">
+                </button>
             </div>
         </div>
     </section>

@@ -114,7 +114,9 @@ body {
 }
 
 .theme-icon {
-    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
 }
 
 .site-header {
@@ -268,13 +270,14 @@ section {
     background: var(--bg-card);
     border: 2px solid var(--accent-primary);
     border-radius: 12px;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .grid-header {
     display: flex;
     background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
     border-bottom: 2px solid var(--accent-primary);
+    border-radius: 10px 10px 0 0;
 }
 
 .header-cell {
@@ -298,6 +301,7 @@ section {
     height: var(--grid-height, 600px);
     min-height: 400px;
     padding: 10px 0 10px 20px;
+    border-radius: 0 0 10px 10px;
 }
 
 .time-column {
@@ -391,7 +395,7 @@ section {
 .course-box:hover {
     z-index: 100;
     box-shadow: 0 4px 20px var(--accent-glow);
-    transform: scale(1.5);
+    transform: scale(1.75);
     transform-origin: center center;
     overflow: visible;
 }
@@ -406,11 +410,20 @@ section {
 }
 
 .course-hover-details .detail-item {
+    display: flex;
+    align-items: center;
     font-size: 6px;
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.detail-icon {
+    width: 6px;
+    height: 6px;
+    margin-right: 2px;
+    flex-shrink: 0;
 }
 
 .course-info,
@@ -419,9 +432,9 @@ section {
     color: var(--text-muted);
 }
 
-/* Remove buttons - hidden by default, shown in edit mode */
+/* Remove buttons - always visible */
 .course-box .remove-btn {
-    display: none;
+    display: flex;
     position: absolute;
     top: 4px;
     right: 4px;
@@ -439,23 +452,18 @@ section {
     cursor: pointer;
 }
 
-body.edit-mode .course-box .remove-btn {
-    display: flex;
-}
-
-body.edit-mode .mobile-course-card .remove-mobile-btn {
-    display: block;
-}
-
-.mobile-course-card .remove-mobile-btn {
-    display: none;
-}
-
 /* Schedule controls container */
 #scheduleControls {
     display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
     justify-content: center;
     gap: 20px;
+    margin: 20px 0;
+}
+
+#scheduleControls.hidden {
+    display: none;
 }
 
 /* Both buttons - equal sizing */
@@ -463,8 +471,12 @@ body.edit-mode .mobile-course-card .remove-mobile-btn {
 #clearScheduleBtn {
     flex: 0 0 220px;
     width: 220px;
+    height: 48px;
     box-sizing: border-box;
     text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .edit-toggle-btn {
@@ -603,6 +615,12 @@ body.edit-mode .mobile-course-card .remove-mobile-btn {
     box-shadow: none;
 }
 
+.search-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
 /* ==========================================
    Modal Overlays
    ========================================== */
@@ -678,6 +696,18 @@ body.edit-mode .mobile-course-card .remove-mobile-btn {
     padding: 0;
 }
 
+.filter-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.section-icon {
+    width: 14px;
+    height: 14px;
+    vertical-align: middle;
+    margin-right: 4px;
+}
+
 .filter-toggle-btn:hover {
     border-color: var(--accent-primary);
     background: var(--bg-secondary);
@@ -711,10 +741,68 @@ body.edit-mode .mobile-course-card .remove-mobile-btn {
     color: var(--text-primary);
 }
 
+.filters-panel input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+
 .filters-panel input:focus,
 .filters-panel select:focus {
     outline: none;
     border-color: var(--accent-primary);
+}
+
+.day-checkboxes {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.day-checkboxes label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.day-checkboxes input[type="checkbox"] {
+    width: auto;
+    flex: none;
+}
+
+.conflict-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.conflict-toggle input[type="checkbox"] {
+    width: auto;
+    flex: none;
+}
+
+/* Conflict warning in section card header */
+.conflict-warning {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--danger);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: auto;
+}
+
+.section-card.has-conflict {
+    border-color: var(--danger);
+    opacity: 0.8;
 }
 
 #sectionList {
@@ -989,10 +1077,89 @@ body.edit-mode .mobile-course-card .remove-mobile-btn {
 }
 
 /* ==========================================
+   Mobile Card Styling
+   ========================================== */
+
+.card-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.card-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.section-badge,
+.crn-badge {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.crn-badge {
+    background: var(--accent-secondary);
+}
+
+.remove-mobile-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    background: var(--danger);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: normal;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    line-height: 1;
+}
+
+.remove-mobile-btn:hover {
+    filter: brightness(1.2);
+}
+
+.meta-icon {
+    width: 14px;
+    height: 14px;
+    vertical-align: middle;
+    margin-right: 4px;
+}
+
+.course-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.meta-row {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* ==========================================
    Clear Schedule Button
    ========================================== */
 
 #scheduleControls {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 20px;
     text-align: center;
     margin-top: 25px;
 }
@@ -1202,7 +1369,6 @@ input[type="time"] {
     background: var(--course-box-bg);
     border-left: 4px solid var(--course-box-border);
     padding: 12px 15px;
-    padding-bottom: 45px;
     position: relative;
     border-bottom: 1px solid var(--border-color);
 }
@@ -1260,21 +1426,4 @@ input[type="time"] {
 .mobile-course-card .course-meta .meta-row {
     display: flex;
     align-items: center;
-}
-
-.mobile-course-card .remove-mobile-btn {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    background: var(--danger);
-    color: white;
-    border: none;
-    border-radius: 0 0 0 8px;
-    padding: 8px;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    text-transform: uppercase;
 }

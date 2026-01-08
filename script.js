@@ -233,12 +233,12 @@ function createCourseBox(course, schedule, isManual = false) {
     box.innerHTML = `
         <button class="remove-btn" title="Remove course">×</button>
         <div class="course-code">${course.subject} ${course.courseCode}</div>
-        <div class="course-section-line">Sec ${course.section || '?'} | ${course.crn || '??'}</div>
+        <div class="course-section-line">${course.section || '?'} | ${course.crn || '??'}</div>
         <div class="course-hover-details">
-            <div class="detail-item">🕐 ${schedule.time || 'TBA'}</div>
-            <div class="detail-item">📍 ${schedule.room || 'TBA'}</div>
-            <div class="detail-item">👨‍🏫 ${schedule.instructor || course.primaryInstructor || 'TBA'}</div>
-            ${course.credits ? `<div class="detail-item">📚 ${course.credits} Credits</div>` : ''}
+            <div class="detail-item"><img src="icons/time.png" alt="" class="detail-icon"> ${schedule.time || 'TBA'}</div>
+            <div class="detail-item"><img src="icons/location.png" alt="" class="detail-icon"> ${schedule.room || 'TBA'}</div>
+            <div class="detail-item"><img src="icons/instructor.png" alt="" class="detail-icon"> ${schedule.instructor || course.primaryInstructor || 'TBA'}</div>
+            ${course.credits ? `<div class="detail-item"><img src="icons/credits.png" alt="" class="detail-icon"> ${course.credits} Credits</div>` : ''}
         </div>
     `;
 
@@ -367,7 +367,7 @@ function displayCourses(courses) {
     generateMobileScheduleList(courses, container);
 
     // Show schedule controls and suggestions, hide form
-    document.getElementById('scheduleControls').style.display = 'block';
+    document.getElementById('scheduleControls').classList.remove('hidden');
     document.querySelector('section').style.display = 'block';
     document.querySelector('main').style.display = 'none';
 }
@@ -432,19 +432,21 @@ function generateMobileScheduleList(courses, container) {
             card.dataset.courseCode = `${course.subject} ${course.courseCode}`;
 
             card.innerHTML = `
-                <div class="card-badges">
-                    <span class="section-badge">${course.section || '??'}</span>
-                    <span class="crn-badge">${course.crn || '??'}</span>
+                <div class="card-header-row">
+                    <div class="course-code">${course.subject} ${course.courseCode}</div>
+                    <div class="card-badges">
+                        <span class="section-badge">${course.section || '??'}</span>
+                        <span class="crn-badge">${course.crn || '??'}</span>
+                        <button class="remove-mobile-btn" title="Remove">×</button>
+                    </div>
                 </div>
-                <div class="course-code">${course.subject} ${course.courseCode}</div>
                 <div class="course-title">${course.title || ''}</div>
                 <div class="course-meta">
-                    <div class="meta-row">🕐 ${schedule.time || 'TBA'}</div>
-                    <div class="meta-row">📍 ${schedule.room || 'TBA'}</div>
-                    <div class="meta-row">👨‍🏫 ${schedule.instructor || course.primaryInstructor || 'TBA'}</div>
-                    ${course.credits ? `<div class="meta-row">📚 ${course.credits} Credits</div>` : ''}
+                    <div class="meta-row"><img src="icons/time.png" alt="" class="meta-icon"> ${schedule.time || 'TBA'}</div>
+                    <div class="meta-row"><img src="icons/location.png" alt="" class="meta-icon"> ${schedule.room || 'TBA'}</div>
+                    <div class="meta-row"><img src="icons/instructor.png" alt="" class="meta-icon"> ${schedule.instructor || course.primaryInstructor || 'TBA'}</div>
+                    ${course.credits ? `<div class="meta-row"><img src="icons/credits.png" alt="" class="meta-icon"> ${course.credits} Credits</div>` : ''}
                 </div>
-                <button class="remove-mobile-btn" title="Remove">✕ REMOVE</button>
             `;
 
             card.querySelector('.remove-mobile-btn').onclick = async (e) => {
@@ -523,8 +525,10 @@ async function showSectionChoices(code) {
     if (filtersPanel) filtersPanel.style.display = 'none';
     document.getElementById('filterInstructor').value = '';
     document.getElementById('filterSection').value = '';
-    document.getElementById('filterDay').value = '';
+    document.getElementById('filterCrn').value = '';
     document.getElementById('filterStartTime').value = '';
+    document.getElementById('filterConflict').checked = false;
+    document.querySelectorAll('input[name="filterDay"]').forEach(cb => cb.checked = false);
 
     modal.style.display = 'flex';
 
@@ -564,6 +568,47 @@ async function showSectionChoices(code) {
             card.dataset.section = course.section || '';
             card.dataset.days = schedDays;
             card.dataset.startTime = schedTimeValue;
+            card.dataset.crn = course.crn || '';
+            card.dataset.credits = course.credits || '';
+
+            // Check for conflicts with courses already on the grid
+            const existingCourses = getCoursesOnGrid();
+            let sectionHasConflict = false;
+            let conflictReason = '';
+
+            // Check if same subject code already exists
+            const courseCode = `${course.subject} ${course.courseCode}`;
+            if (existingCourses.some(c => c === courseCode)) {
+                sectionHasConflict = true;
+                conflictReason = 'Same course';
+            }
+
+            // Check for time/day conflicts with existing courses
+            if (!sectionHasConflict) {
+                const allExistingBoxes = document.querySelectorAll('.course-box');
+                course.schedules.forEach(sched => {
+                    if (!sched.days || !sched.time) return;
+                    const newParsed = parseScheduleTime(sched);
+                    if (!newParsed) return;
+
+                    allExistingBoxes.forEach(box => {
+                        const boxDays = box.dataset.days || '';
+                        const boxStart = parseInt(box.dataset.startMin) || 0;
+                        const boxEnd = parseInt(box.dataset.endMin) || 0;
+
+                        // Check day overlap
+                        const daysOverlap = sched.days.split('').some(d => boxDays.includes(d));
+                        if (daysOverlap && timeRangesOverlap(newParsed.startMin, newParsed.endMin, boxStart, boxEnd)) {
+                            sectionHasConflict = true;
+                            conflictReason = 'Time Conflict';
+                        }
+                    });
+                });
+            }
+
+            if (sectionHasConflict) {
+                card.classList.add('has-conflict');
+            }
 
             // Section header with course name on left, section/CRN on right
             const header = document.createElement('div');
@@ -571,7 +616,8 @@ async function showSectionChoices(code) {
             header.innerHTML = `
                 <span class="section-course-name">${course.subject}-${course.courseCode}</span>
                 <span class="section-info-right">
-                    <span class="section-number">Sec ${course.section || '??'}</span>
+                    ${sectionHasConflict ? `<span class="conflict-warning">${conflictReason}</span>` : ''}
+                    <span class="section-number">${course.section || '??'}</span>
                     <span class="section-crn">${course.crn || '??'}</span>
                 </span>
             `;
@@ -587,23 +633,23 @@ async function showSectionChoices(code) {
                 schedRow.className = 'schedule-row';
                 schedRow.innerHTML = `
                     <div class="detail-row">
-                        <span class="detail-label">📅 Days:</span>
+                        <span class="detail-label"><img src="icons/days.png" alt="" class="section-icon"> Days:</span>
                         <span class="detail-value">${formatDays(sched.days)}</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">🕐 Time:</span>
+                        <span class="detail-label"><img src="icons/time.png" alt="" class="section-icon"> Time:</span>
                         <span class="detail-value">${sched.time}</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">📍 Location:</span>
+                        <span class="detail-label"><img src="icons/location.png" alt="" class="section-icon"> Location:</span>
                         <span class="detail-value">${sched.room || 'TBA'}</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">👨‍🏫 Instructor:</span>
+                        <span class="detail-label"><img src="icons/instructor.png" alt="" class="section-icon"> Instructor:</span>
                         <span class="detail-value">${sched.instructor || course.primaryInstructor || 'TBA'}</span>
                     </div>
                     ${course.credits ? `<div class="detail-row">
-                        <span class="detail-label">📚 Credits:</span>
+                        <span class="detail-label"><img src="icons/credits.png" alt="" class="section-icon"> Credits:</span>
                         <span class="detail-value">${course.credits}</span>
                     </div>` : ''}
                     </div>
@@ -621,7 +667,7 @@ async function showSectionChoices(code) {
                 const conflict = hasConflict(course);
                 if (conflict) {
                     const confirmed = await showConfirmModal(
-                        '⚠️ Time Conflict',
+                        'Conflict Detected',
                         `This course overlaps with "${conflict}". Remove "${conflict}" and add this course instead?`
                     );
                     if (!confirmed) return;
@@ -722,7 +768,16 @@ function hasConflict(newCourse) {
     if (!gridBody) return null;
 
     const existingBoxes = gridBody.querySelectorAll('.course-box');
+    const newCourseCode = `${newCourse.subject} ${newCourse.courseCode}`;
 
+    // Check for same course (duplicate subject code)
+    for (const box of existingBoxes) {
+        if (box.dataset.courseCode === newCourseCode) {
+            return newCourseCode + ' (duplicate)';
+        }
+    }
+
+    // Check for time/day conflicts
     for (const sched of newCourse.schedules) {
         const parsed = parseScheduleTime(sched);
         if (!parsed) continue;
@@ -805,44 +860,51 @@ document.addEventListener('DOMContentLoaded', () => {
     function applyFilters() {
         const instructorFilter = document.getElementById('filterInstructor')?.value.toLowerCase() || '';
         const sectionFilter = document.getElementById('filterSection')?.value.toUpperCase() || '';
-        const dayFilter = document.getElementById('filterDay')?.value || '';
+        const crnFilter = document.getElementById('filterCrn')?.value || '';
         const startTimeFilter = document.getElementById('filterStartTime')?.value || '';
+        const hideConflicting = document.getElementById('filterConflict')?.checked || false;
+
+        // Get selected days (multi-select checkboxes)
+        const dayCheckboxes = document.querySelectorAll('input[name="filterDay"]:checked');
+        const selectedDays = Array.from(dayCheckboxes).map(cb => cb.value);
 
         document.querySelectorAll('.section-card').forEach(card => {
             const instructor = card.dataset.instructor?.toLowerCase() || '';
             const section = card.dataset.section?.toUpperCase() || '';
             const days = card.dataset.days || '';
             const startTime = card.dataset.startTime || '';
+            const crn = card.dataset.crn || '';
+            const hasConflict = card.classList.contains('has-conflict');
 
             let show = true;
 
             if (instructorFilter && !instructor.includes(instructorFilter)) show = false;
             if (sectionFilter && !section.includes(sectionFilter)) show = false;
-            if (dayFilter && !days.includes(dayFilter)) show = false;
+            if (crnFilter && !crn.includes(crnFilter)) show = false;
             if (startTimeFilter && startTime < startTimeFilter) show = false;
+            if (hideConflicting && hasConflict) show = false;
+
+            // Multi-day filter: show if card has ANY of the selected days
+            if (selectedDays.length > 0) {
+                const hasMatchingDay = selectedDays.some(day => days.includes(day));
+                if (!hasMatchingDay) show = false;
+            }
 
             card.style.display = show ? 'block' : 'none';
         });
     }
 
     // Attach filter event listeners
-    ['filterInstructor', 'filterSection', 'filterDay', 'filterStartTime'].forEach(id => {
+    ['filterInstructor', 'filterSection', 'filterCredits', 'filterStartTime', 'filterConflict'].forEach(id => {
         document.getElementById(id)?.addEventListener('input', applyFilters);
         document.getElementById(id)?.addEventListener('change', applyFilters);
     });
 
-    // Edit mode toggle
-    document.getElementById('editModeToggle')?.addEventListener('click', function () {
-        document.body.classList.toggle('edit-mode');
-        this.classList.toggle('active');
-        this.textContent = document.body.classList.contains('edit-mode') ? '✓ Editing' : '✏️ Edit Mode';
-
-        // Update mobile view - hide empty days
-        document.querySelectorAll('.mobile-day-group').forEach(dayGroup => {
-            const hasCards = dayGroup.querySelectorAll('.mobile-course-card').length > 0;
-            dayGroup.style.display = hasCards ? '' : 'none';
-        });
+    // Day checkboxes listener
+    document.querySelectorAll('input[name="filterDay"]').forEach(cb => {
+        cb.addEventListener('change', applyFilters);
     });
+
 
     // Major selection
     document.getElementById('major')?.addEventListener('change', function () {
@@ -988,7 +1050,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Hide schedule and suggestions, show form
         document.getElementById('timetableContainer').innerHTML = '';
-        document.getElementById('scheduleControls').style.display = 'none';
+        document.getElementById('scheduleControls').classList.add('hidden');
         document.querySelector('section').style.display = 'none';
         document.querySelector('main').style.display = 'block';
 
