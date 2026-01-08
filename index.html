@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FcitIndex</title>
+    <title>FCITIndex</title>
     <link rel="stylesheet" href="style.css" />
 </head>
 
@@ -12,9 +12,9 @@
     <header class="site-header">
         <div class="logo-section">
             <span class="logo">FCITIndex</span>
-            <span class="logo-tagline">FCIT Courses Scheduler</span>
+            <span class="logo-tagline">Build Your FCIT Schedule</span>
         </div>
-        <h2 class="main-heading">Build Your FCIT Schedule</h2>
+
         <button id="themeToggle" class="theme-toggle" title="Toggle Light/Dark Mode">
             <img src="icons/theme.png" alt="" class="theme-icon">
         </button>
@@ -35,49 +35,66 @@
             <div id="suggestedButtons"></div>
         </div>
 
-        <!-- Course search modal -->
         <div id="modal" class="modal-overlay">
             <div class="modal-content">
                 <div class="modal-header">
                     <h3 id="modalTitle">Choose a section for <span></span></h3>
-                    <div class="modal-header-buttons">
-                        <button id="filterToggle" class="filter-toggle-btn" title="Toggle Filters">
-                            <img src="icons/search.png" alt="" class="filter-icon">
-                        </button>
-                        <button onclick="document.getElementById('modal').style.display='none'" class="modal-close-btn"
-                            title="Close">×</button>
-                    </div>
+                    <button onclick="document.getElementById('modal').style.display='none'" class="modal-close-btn"
+                        title="Close">×</button>
                 </div>
-                <div class="modal-scroll-container">
-                    <div id="filtersPanel" class="filters-panel" style="display: none;">
+
+                <div class="modal-body-wrapper">
+                    <div id="filtersPanel" class="filters-panel">
                         <div class="filter-row">
                             <input type="text" id="filterInstructor" placeholder="Instructor name...">
+                        </div>
+                        <div class="filter-row">
                             <input type="text" id="filterSection" placeholder="Section (e.g., AB)">
                         </div>
                         <div class="filter-row">
                             <input type="text" id="filterCrn" placeholder="CRN">
-                            <input type="time" id="filterStartTime" placeholder="Start after">
+                        </div>
+                        <div class="filter-row">
+                            <select id="filterStartTime" class="custom-select">
+                                <option value="">Any Start Time</option>
+                            </select>
                         </div>
                         <div class="filter-row day-checkboxes">
-                            <label><input type="checkbox" name="filterDay" value="U"> Sun</label>
-                            <label><input type="checkbox" name="filterDay" value="M"> Mon</label>
-                            <label><input type="checkbox" name="filterDay" value="T"> Tue</label>
-                            <label><input type="checkbox" name="filterDay" value="W"> Wed</label>
-                            <label><input type="checkbox" name="filterDay" value="R"> Thu</label>
+                            <label class="day-chip"><input type="checkbox" name="filterDay" value="U"> Sun</label>
+                            <label class="day-chip"><input type="checkbox" name="filterDay" value="M"> Mon</label>
+                            <label class="day-chip"><input type="checkbox" name="filterDay" value="T"> Tue</label>
+                            <label class="day-chip"><input type="checkbox" name="filterDay" value="W"> Wed</label>
+                            <label class="day-chip"><input type="checkbox" name="filterDay" value="R"> Thu</label>
                         </div>
                         <div class="filter-row">
                             <label class="conflict-toggle">
-                                <input type="checkbox" id="filterConflict">
+                                <input type="checkbox" id="filterConflict" checked>
                                 <span>Hide Conflicting Sections</span>
                             </label>
                         </div>
                     </div>
-                    <div id="sectionList"></div>
+
+                    <div class="modal-scroll-container">
+                        <div id="sectionList"></div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Confirmation modal -->
+        <div id="detailsModal" class="modal-overlay">
+            <div class="modal-content details-modal">
+                <div class="modal-header">
+                    <h3 id="detailsTitle">Course Details</h3>
+                    <button id="closeDetailsBtn" class="modal-close-btn">×</button>
+                </div>
+                <div class="details-body" id="detailsContent">
+                </div>
+                <div class="details-footer">
+                    <button id="detailsRemoveBtn" class="btn-danger">Remove Course</button>
+                </div>
+            </div>
+        </div>
+
         <div id="confirmModal" class="modal-overlay">
             <div class="modal-content confirm-modal">
                 <h3 id="confirmTitle">Confirm Action</h3>
@@ -146,6 +163,11 @@
             <button type="submit">Load Block Schedule</button>
         </form>
     </main>
+
+    <div id="toast" class="toast hidden">
+        <span id="toastMessage">Course removed</span>
+        <button id="undoBtn">UNDO</button>
+    </div>
 
     <script src="script.js"></script>
 </body>

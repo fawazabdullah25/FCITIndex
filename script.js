@@ -64,22 +64,26 @@ const alwaysSuggested = {
     }
 };
 
-// Grid configuration
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
-const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu'];
 const DAY_MAP = { U: 'Sunday', M: 'Monday', T: 'Tuesday', W: 'Wednesday', R: 'Thursday' };
-const DAY_ORDER = { U: 0, M: 1, T: 2, W: 3, R: 4 }; // For sorting days in UMTWR order
-const isMobile = () => window.innerWidth <= 768;
-const PIXELS_PER_HOUR = 80; // Height pixels per hour (increased for more space)
-const TIME_PADDING_HOURS = 1; // Padding before earliest and after latest course
+const DAY_ORDER = { U: 0, M: 1, T: 2, W: 3, R: 4 };
+const PIXELS_PER_HOUR = 80;
+const TIME_PADDING_HOURS = 1;
 
-// Track current state
 let currentMajor = null;
 let currentTerm = null;
-let currentSuggestions = [];
-let currentTimeRange = { startHour: 8, endHour: 20 }; // Default, will be calculated dynamically
+let currentTimeRange = { startHour: 8, endHour: 17 };
+let undoStack = [];
+let undoTimeout = null;
 
-// Parse time string to minutes since midnight
+// ==========================================
+// UTILITY FUNCTIONS
+// ==========================================
+
+function formatCourseCode(subject, code) {
+    return `${subject}-${code}`;
+}
+
 function parseTime(timeStr) {
     const [time, ampm] = timeStr.split(' ');
     let [hour, min] = time.split(':').map(Number);
@@ -88,21 +92,26 @@ function parseTime(timeStr) {
     return (hour * 60) + min;
 }
 
-// Format minutes to readable time
-function formatTime(minutes) {
-    let hour = Math.floor(minutes / 60);
-    const min = minutes % 60;
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    hour = hour % 12 || 12;
-    return `${hour}:${min.toString().padStart(2, '0')} ${ampm}`;
+function parseScheduleTime(schedule) {
+    const timeMatch = schedule.time.match(/(\d{1,2}:\d{2} [AP]M) - (\d{1,2}:\d{2} [AP]M)/);
+    if (!timeMatch) return null;
+    const startMin = parseTime(timeMatch[1]);
+    const endMin = parseTime(timeMatch[2]);
+    if (isNaN(startMin) || isNaN(endMin)) return null;
+    return { ...schedule, startMin, endMin };
 }
 
-// Check if two time ranges overlap
 function timeRangesOverlap(start1, end1, start2, end2) {
     return start1 < end2 && start2 < end1;
 }
 
-// Show confirmation modal and return a promise
+function formatDays(days) {
+    const dayNames = { U: 'Sun', M: 'Mon', T: 'Tue', W: 'Wed', R: 'Thu' };
+    return days.split('').sort((a, b) => (DAY_ORDER[a] ?? 99) - (DAY_ORDER[b] ?? 99))
+        .map(d => dayNames[d] || d).join(', ');
+}
+
+// Show Confirmation Modal (Async)
 function showConfirmModal(title, message) {
     return new Promise((resolve) => {
         const modal = document.getElementById('confirmModal');
@@ -110,11 +119,6 @@ function showConfirmModal(title, message) {
         const messageEl = document.getElementById('confirmMessage');
         const yesBtn = document.getElementById('confirmYes');
         const noBtn = document.getElementById('confirmNo');
-
-        if (!modal || !titleEl || !messageEl || !yesBtn || !noBtn) {
-            resolve(confirm(message));
-            return;
-        }
 
         titleEl.textContent = title;
         messageEl.textContent = message;
@@ -131,99 +135,167 @@ function showConfirmModal(title, message) {
     });
 }
 
-// Parse schedule time and add parsed values
-function parseScheduleTime(schedule) {
-    const timeMatch = schedule.time.match(/(\d{1,2}:\d{2} [AP]M) - (\d{1,2}:\d{2} [AP]M)/);
-    if (!timeMatch) return null;
-
-    const startMin = parseTime(timeMatch[1]);
-    const endMin = parseTime(timeMatch[2]);
-
-    if (isNaN(startMin) || isNaN(endMin)) return null;
-
-    return { ...schedule, startMin, endMin };
-}
-
-// Calculate dynamic time range based on courses
+// Calculate dynamic time range - Up to 2 AM (26)
 function calculateTimeRange(courses) {
     let earliestMin = 24 * 60;
     let latestMin = 0;
+    let hasCourses = false;
 
     courses.forEach(course => {
         course.schedules.forEach(schedule => {
             const parsed = parseScheduleTime(schedule);
             if (!parsed) return;
+            hasCourses = true;
             earliestMin = Math.min(earliestMin, parsed.startMin);
             latestMin = Math.max(latestMin, parsed.endMin);
         });
     });
 
-    // Default if no courses
-    if (earliestMin >= latestMin) {
-        return { startHour: 8, endHour: 17 };
-    }
+    if (!hasCourses) return { startHour: 8, endHour: 17 };
 
-    // Add padding and round to full hours
     const startHour = Math.max(7, Math.floor(earliestMin / 60) - TIME_PADDING_HOURS);
-    const endHour = Math.min(22, Math.ceil(latestMin / 60) + TIME_PADDING_HOURS);
+    // Allow ending up to 02:00 AM (26 * 60)
+    const endHour = Math.min(26, Math.ceil(latestMin / 60) + TIME_PADDING_HOURS);
 
     return { startHour, endHour };
 }
 
-// Generate time labels for grid
-function generateTimeLabels(startHour, endHour) {
-    const labels = [];
-    for (let h = startHour; h <= endHour; h++) {
-        const hour = h % 12 || 12;
-        const ampm = h < 12 ? 'AM' : 'PM';
-        labels.push({ hour: h, label: `${hour}:00 ${ampm}` });
+// ==========================================
+// COURSE MANAGEMENT & UNDO
+// ==========================================
+
+function removeCourse(courseCode) {
+    const boxes = document.querySelectorAll(`.course-box[data-course-code="${courseCode}"]`);
+    if (boxes.length === 0) return;
+
+    // Save for undo
+    const courseData = boxes[0].courseData;
+    undoStack.push(courseData);
+
+    // Remove
+    document.querySelectorAll(`.course-box[data-course-code="${courseCode}"]`).forEach(b => b.remove());
+    document.querySelectorAll(`.mobile-course-card[data-course-code="${courseCode}"]`).forEach(c => c.remove());
+
+    updateSuggestedCourses();
+    showToast(`Removed ${courseCode}`);
+}
+
+async function restoreLastCourse() {
+    const course = undoStack.pop();
+    if (course) {
+        // Use handleCourseAddition to check for conflicts during undo
+        await handleCourseAddition(course, true);
+
+        const toast = document.getElementById('toast');
+        toast.classList.add('hidden');
+        toast.classList.remove('toast-exit');
+        updateSuggestedCourses();
     }
-    return labels;
 }
 
-// Get courses on grid for suggestion updates
-function getCoursesOnGrid() {
-    const grid = document.querySelector('.timetable-grid');
-    if (!grid) return [];
+function showToast(msg) {
+    const toast = document.getElementById('toast');
+    const msgEl = document.getElementById('toastMessage');
 
-    const codes = new Set();
-    grid.querySelectorAll('.course-box').forEach(box => {
-        const code = box.dataset.courseCode;
-        if (code) codes.add(code.replace(' ', '-'));
-    });
-    return [...codes];
+    if (undoTimeout) clearTimeout(undoTimeout);
+
+    msgEl.textContent = msg;
+    toast.classList.remove('hidden', 'toast-exit');
+
+    document.getElementById('undoBtn').onclick = restoreLastCourse;
+
+    undoTimeout = setTimeout(() => {
+        toast.classList.add('toast-exit');
+        setTimeout(() => toast.classList.add('hidden'), 300);
+    }, 3000);
 }
 
-// Update suggested courses
-function updateSuggestedCourses() {
-    if (!currentMajor || !currentTerm) return;
+// ==========================================
+// CONFLICT & ADD LOGIC (Recursive)
+// ==========================================
 
-    const coursesOnGrid = getCoursesOnGrid();
-    const requiredCodes = termSubjects[currentMajor]?.[currentTerm] || [];
-    const alwaysSuggest = alwaysSuggested[currentMajor]?.[currentTerm] || [];
+function findConflict(newCourse) {
+    const existingCourses = getCoursesOnGrid();
+    const existingFullData = getAllCoursesFromGrid();
 
-    const missingRequired = requiredCodes.filter(code => !coursesOnGrid.includes(code));
-    const missingSuggested = alwaysSuggest.filter(code => !coursesOnGrid.includes(code));
+    const newCourseCode = formatCourseCode(newCourse.subject, newCourse.courseCode);
 
-    const allSuggestions = [...new Set([...missingRequired, ...missingSuggested])];
-    currentSuggestions = allSuggestions;
-    showSuggestedCourses(allSuggestions);
+    if (existingCourses.includes(newCourseCode)) {
+        return { type: 'same', code: newCourseCode };
+    }
+
+    for (const s of newCourse.schedules) {
+        const parsedS = parseScheduleTime(s);
+        if (!parsedS) continue;
+        const myDays = parsedS.days.split('');
+
+        for (const existing of existingFullData) {
+            for (const eSched of existing.schedules) {
+                const parsedE = parseScheduleTime(eSched);
+                if (!parsedE) continue;
+                const dayOverlap = myDays.some(d => parsedE.days.includes(d));
+                if (dayOverlap && timeRangesOverlap(parsedS.startMin, parsedS.endMin, parsedE.startMin, parsedE.endMin)) {
+                    const conflictCode = formatCourseCode(existing.subject, existing.courseCode);
+                    return { type: 'time', code: conflictCode };
+                }
+            }
+        }
+    }
+    return null;
 }
 
-// Create course box with pixel-based positioning
-function createCourseBox(course, schedule, isManual = false) {
+// Recursive function to handle adding a course, replacing conflicts if necessary
+async function handleCourseAddition(course, isUndo = false) {
+    const conflict = findConflict(course);
+
+    if (!conflict) {
+        addCourseToGrid(course);
+        // Only hide modal if not from Undo action
+        if (!isUndo) document.getElementById('modal').style.display = 'none';
+        updateSuggestedCourses();
+        return;
+    }
+
+    // Prompt user
+    let title, msg;
+    const prefix = isUndo ? "Restoring " : "Adding ";
+    const subject = formatCourseCode(course.subject, course.courseCode);
+
+    if (conflict.type === 'same') {
+        title = 'Duplicate Course';
+        msg = `${prefix}${subject} duplicates ${conflict.code}. Replace it?`;
+    } else {
+        title = 'Time Conflict';
+        msg = `${prefix}${subject} conflicts with ${conflict.code}. Replace it?`;
+    }
+
+    const confirm = await showConfirmModal(title, msg);
+    if (!confirm) return;
+
+    // Remove conflicting course
+    removeCourse(conflict.code);
+
+    // Recursively try adding again
+    await handleCourseAddition(course, isUndo);
+}
+
+// ==========================================
+// UI GENERATION
+// ==========================================
+
+function createCourseBox(course, schedule) {
     const box = document.createElement('div');
     box.className = 'course-box';
-    box.dataset.courseCode = `${course.subject} ${course.courseCode}`;
+    const codeStr = formatCourseCode(course.subject, course.courseCode);
+
+    box.dataset.courseCode = codeStr;
     box.dataset.startMin = schedule.startMin;
     box.dataset.endMin = schedule.endMin;
     box.dataset.days = schedule.days;
+    box.courseData = course;
 
-    // Calculate position based on time (percentage within the grid)
-    // The grid shows time from startHour to endHour, so total duration is (endHour - startHour) hours
     const gridStartMin = currentTimeRange.startHour * 60;
     const totalGridMinutes = (currentTimeRange.endHour - currentTimeRange.startHour) * 60;
-
     const topPercent = ((schedule.startMin - gridStartMin) / totalGridMinutes) * 100;
     const heightPercent = ((schedule.endMin - schedule.startMin) / totalGridMinutes) * 100;
 
@@ -231,322 +303,252 @@ function createCourseBox(course, schedule, isManual = false) {
     box.style.height = `${heightPercent}%`;
 
     box.innerHTML = `
-        <button class="remove-btn" title="Remove course">×</button>
-        <div class="course-code">${course.subject} ${course.courseCode}</div>
-        <div class="course-section-line">${course.section || '?'} | ${course.crn || '??'}</div>
-        <div class="course-hover-details">
-            <div class="detail-item"><img src="icons/time.png" alt="" class="detail-icon"> ${schedule.time || 'TBA'}</div>
-            <div class="detail-item"><img src="icons/location.png" alt="" class="detail-icon"> ${schedule.room || 'TBA'}</div>
-            <div class="detail-item"><img src="icons/instructor.png" alt="" class="detail-icon"> ${schedule.instructor || course.primaryInstructor || 'TBA'}</div>
-            ${course.credits ? `<div class="detail-item"><img src="icons/credits.png" alt="" class="detail-icon"> ${course.credits} Credits</div>` : ''}
+        <div class="course-box-header">
+            <span class="course-code">${codeStr}</span>
+            <span class="course-section-badge">${course.section}</span>
+        </div>
+        <div class="course-detail-inline">
+            <img src="icons/time.png" class="detail-icon"> ${schedule.time}
+        </div>
+        <div class="course-detail-inline loc">
+            <img src="icons/location.png" class="detail-icon"> ${schedule.room || 'TBA'}
         </div>
     `;
-
-    box.querySelector('.remove-btn').onclick = async (e) => {
-        e.stopPropagation();
-        const courseName = `${course.subject} ${course.courseCode}`;
-        const confirmed = await showConfirmModal(
-            'Remove Course',
-            `Remove ${courseName} from your schedule?`
-        );
-        if (confirmed) {
-            document.querySelectorAll('.course-box').forEach(b => {
-                if (b.dataset.courseCode === courseName) b.remove();
-            });
-            updateSuggestedCourses();
-        }
-    };
-
+    box.onclick = () => showCourseDetails(course);
     return box;
 }
 
-// Display courses in timetable grid with dynamic time range
+function showCourseDetails(course) {
+    const modal = document.getElementById('detailsModal');
+    const content = document.getElementById('detailsContent');
+    const removeBtn = document.getElementById('detailsRemoveBtn');
+
+    const codeStr = formatCourseCode(course.subject, course.courseCode);
+
+    const schedulesHtml = course.schedules.map((s, index) => `
+        ${index > 0 ? '<hr style="border:0; border-top:1px dashed var(--border-color); margin:10px 0;">' : ''}
+        <div class="details-row"><span class="details-label"><img src="icons/days.png" class="section-icon"> Days:</span><span class="details-value">${formatDays(s.days)}</span></div>
+        <div class="details-row"><span class="details-label"><img src="icons/time.png" class="section-icon"> Time:</span><span class="details-value">${s.time}</span></div>
+        <div class="details-row"><span class="details-label"><img src="icons/location.png" class="section-icon"> Location:</span><span class="details-value">${s.room || 'TBA'}</span></div>
+        <div class="details-row"><span class="details-label"><img src="icons/instructor.png" class="section-icon"> Instructor:</span><span class="details-value">${s.instructor || 'TBA'}</span></div>
+    `).join('');
+
+    content.innerHTML = `
+        <div class="details-row"><span class="details-label">Course:</span><span class="details-value">${codeStr} - ${course.title || ''}</span></div>
+        <div class="details-row"><span class="details-label">Section:</span><span class="details-value">${course.section}</span></div>
+        <div class="details-row"><span class="details-label">CRN:</span><span class="details-value">${course.crn}</span></div>
+        <div class="details-row"><span class="details-label">Credits:</span><span class="details-value">${course.credits} H</span></div>
+        <hr style="border:0; border-top:1px solid var(--border-color); margin:15px 0;">
+        ${schedulesHtml}
+    `;
+
+    removeBtn.onclick = () => {
+        removeCourse(codeStr);
+        modal.style.display = 'none';
+    };
+
+    document.getElementById('closeDetailsBtn').onclick = () => modal.style.display = 'none';
+    modal.style.display = 'flex';
+}
+
 function displayCourses(courses) {
     const container = document.getElementById('timetableContainer');
     if (!container) return;
 
-    // Calculate dynamic time range
     currentTimeRange = calculateTimeRange(courses);
     const { startHour, endHour } = currentTimeRange;
-    const timeLabels = generateTimeLabels(startHour, endHour);
     const gridHeight = (endHour - startHour) * PIXELS_PER_HOUR;
 
-    container.innerHTML = `
-        <h3 class="schedule-title">Your Block Schedule</h3>
-    `;
+    container.innerHTML = `<h3 class="schedule-title">Your Block Schedule</h3>`;
 
-    // Create grid container
     const grid = document.createElement('div');
     grid.className = 'timetable-grid';
     grid.style.setProperty('--grid-height', `${gridHeight}px`);
 
-    // Create header row
     const headerRow = document.createElement('div');
     headerRow.className = 'grid-header';
-
-    const timeHeader = document.createElement('div');
-    timeHeader.className = 'header-cell time-header';
-    timeHeader.textContent = 'Time';
-    headerRow.appendChild(timeHeader);
-
-    // Use abbreviated day names on mobile
-    const dayNames = DAYS;
-
-    DAYS.forEach((day, index) => {
-        const dayHeader = document.createElement('div');
-        dayHeader.className = 'header-cell day-header';
-        dayHeader.textContent = dayNames[index];
-        dayHeader.dataset.day = day; // Keep full name for data reference
-        headerRow.appendChild(dayHeader);
-    });
+    headerRow.innerHTML = '<div class="header-cell time-header">Time</div>';
+    DAYS.forEach(day => headerRow.innerHTML += `<div class="header-cell">${day}</div>`);
     grid.appendChild(headerRow);
 
-    // Create body with time column and day columns
     const gridBody = document.createElement('div');
     gridBody.className = 'grid-body';
 
-    // Time labels column - use same positioning formula as course boxes
     const timeColumn = document.createElement('div');
     timeColumn.className = 'time-column';
-    const totalGridMinutes = (endHour - startHour) * 60;
+    const totalMin = (endHour - startHour) * 60;
 
-    timeLabels.forEach((t) => {
-        const timeLabel = document.createElement('div');
-        timeLabel.className = 'time-label';
-        // Position each label at its hour mark using minutes (same as course positioning)
-        const labelMinutes = (t.hour - startHour) * 60;
-        const topPercent = (labelMinutes / totalGridMinutes) * 100;
-        timeLabel.style.top = `${topPercent}%`;
-        timeLabel.textContent = t.label;
-        timeColumn.appendChild(timeLabel);
-    });
+    for (let h = startHour; h <= endHour; h++) {
+        const h12 = h % 12 || 12;
+        const ampm = h < 12 ? 'AM' : 'PM';
+        const label = document.createElement('div');
+        label.className = 'time-label';
+        const top = ((h - startHour) * 60 / totalMin) * 100;
+        label.style.top = `${top}%`;
+        label.textContent = `${h12} ${ampm}`;
+        timeColumn.appendChild(label);
+    }
     gridBody.appendChild(timeColumn);
 
-    // Day columns
-    DAYS.forEach((day, dayIndex) => {
+    DAYS.forEach(day => {
         const dayColumn = document.createElement('div');
         dayColumn.className = 'day-column';
         dayColumn.dataset.day = day;
 
-        // Add hour lines - use same positioning as time labels
         for (let h = startHour; h <= endHour; h++) {
             const line = document.createElement('div');
             line.className = 'hour-line';
-            const lineMinutes = (h - startHour) * 60;
-            const topPercent = (lineMinutes / totalGridMinutes) * 100;
-            line.style.top = `${topPercent}%`;
+            line.style.top = `${((h - startHour) * 60 / totalMin) * 100}%`;
             dayColumn.appendChild(line);
         }
 
-        // Add courses for this day
         courses.forEach(course => {
             course.schedules.forEach(schedule => {
                 const parsed = parseScheduleTime(schedule);
                 if (!parsed) return;
-
-                // Sort days in UMTWR order
-                const sortedDays = parsed.days.split('')
-                    .sort((a, b) => (DAY_ORDER[a] ?? 99) - (DAY_ORDER[b] ?? 99))
-                    .join('');
-                const courseDays = sortedDays.split('').map(d => DAY_MAP[d] || '').filter(Boolean);
-                if (!courseDays.includes(day)) return;
-
-                const box = createCourseBox(course, parsed);
-                box.courseData = course; // Store for grid reconstruction
-                dayColumn.appendChild(box);
+                const dayCodes = parsed.days.split('');
+                const dayNames = dayCodes.map(d => DAY_MAP[d]);
+                if (dayNames.includes(day)) {
+                    dayColumn.appendChild(createCourseBox(course, parsed));
+                }
             });
         });
-
         gridBody.appendChild(dayColumn);
     });
 
     grid.appendChild(gridBody);
     container.appendChild(grid);
 
-    // Generate mobile schedule list view (card-based)
     generateMobileScheduleList(courses, container);
 
-    // Show schedule controls and suggestions, hide form
     document.getElementById('scheduleControls').classList.remove('hidden');
     document.querySelector('section').style.display = 'block';
     document.querySelector('main').style.display = 'none';
 }
 
-// Generate mobile-friendly card-based schedule list
 function generateMobileScheduleList(courses, container) {
-    // Remove existing mobile list if any
-    const existingList = container.querySelector('.mobile-schedule-list');
-    if (existingList) existingList.remove();
+    let list = container.querySelector('.mobile-schedule-list');
+    if (list) list.remove();
 
-    const mobileList = document.createElement('div');
-    mobileList.className = 'mobile-schedule-list';
+    list = document.createElement('div');
+    list.className = 'mobile-schedule-list';
 
-    // Group courses by day
-    const coursesByDay = {};
-    DAYS.forEach(day => coursesByDay[day] = []);
+    const daysWithCourses = {};
+    DAYS.forEach(day => daysWithCourses[day] = []);
 
-    courses.forEach(course => {
-        course.schedules.forEach(sched => {
-            const parsed = parseScheduleTime(sched);
-            if (!parsed) return;
-
-            const sortedDays = parsed.days.split('')
-                .sort((a, b) => (DAY_ORDER[a] ?? 99) - (DAY_ORDER[b] ?? 99));
-
-            sortedDays.forEach(dayCode => {
-                const dayName = DAY_MAP[dayCode];
-                if (dayName && coursesByDay[dayName]) {
-                    coursesByDay[dayName].push({
-                        course,
-                        schedule: sched,
-                        time: parsed.time || sched.time
-                    });
-                }
+    courses.forEach(c => {
+        c.schedules.forEach(s => {
+            const p = parseScheduleTime(s);
+            if (p) p.days.split('').forEach(d => {
+                const name = DAY_MAP[d];
+                if (daysWithCourses[name]) daysWithCourses[name].push({ course: c, schedule: s, start: p.startMin });
             });
         });
     });
 
-    // Generate cards for each day
     DAYS.forEach(day => {
-        const dayCourses = coursesByDay[day];
+        const dayCourses = daysWithCourses[day];
         if (dayCourses.length === 0) return;
 
-        const dayGroup = document.createElement('div');
-        dayGroup.className = 'mobile-day-group';
+        const group = document.createElement('div');
+        group.className = 'mobile-day-group';
+        group.innerHTML = `<div class="mobile-day-header">${day}</div>`;
 
-        const dayHeader = document.createElement('div');
-        dayHeader.className = 'mobile-day-header';
-        dayHeader.textContent = day;
-        dayGroup.appendChild(dayHeader);
-
-        // Sort by start time
-        dayCourses.sort((a, b) => {
-            const aTime = a.schedule.time?.split(' - ')[0] || '';
-            const bTime = b.schedule.time?.split(' - ')[0] || '';
-            return aTime.localeCompare(bTime);
-        });
+        dayCourses.sort((a, b) => a.start - b.start);
 
         dayCourses.forEach(({ course, schedule }) => {
+            const codeStr = formatCourseCode(course.subject, course.courseCode);
             const card = document.createElement('div');
             card.className = 'mobile-course-card';
-            card.dataset.courseCode = `${course.subject} ${course.courseCode}`;
+            card.dataset.courseCode = codeStr;
 
             card.innerHTML = `
                 <div class="card-header-row">
-                    <div class="course-code">${course.subject} ${course.courseCode}</div>
+                    <div class="mobile-course-code">${codeStr}</div>
                     <div class="card-badges">
-                        <span class="section-badge">${course.section || '??'}</span>
-                        <span class="crn-badge">${course.crn || '??'}</span>
+                        <span class="section-badge">${course.section}</span>
+                        <span class="crn-badge">${course.crn}</span>
+                        <span class="credits-badge">${course.credits} H</span>
                         <button class="remove-mobile-btn" title="Remove">×</button>
                     </div>
                 </div>
-                <div class="course-title">${course.title || ''}</div>
+                <div class="mobile-course-title">${course.title || ''}</div>
                 <div class="course-meta">
-                    <div class="meta-row"><img src="icons/time.png" alt="" class="meta-icon"> ${schedule.time || 'TBA'}</div>
-                    <div class="meta-row"><img src="icons/location.png" alt="" class="meta-icon"> ${schedule.room || 'TBA'}</div>
-                    <div class="meta-row"><img src="icons/instructor.png" alt="" class="meta-icon"> ${schedule.instructor || course.primaryInstructor || 'TBA'}</div>
-                    ${course.credits ? `<div class="meta-row"><img src="icons/credits.png" alt="" class="meta-icon"> ${course.credits} Credits</div>` : ''}
+                    <div class="meta-row"><img src="icons/time.png" class="meta-icon"> ${schedule.time}</div>
+                    <div class="meta-row"><img src="icons/location.png" class="meta-icon"> ${schedule.room || 'TBA'}</div>
+                    <div class="meta-row"><img src="icons/instructor.png" class="meta-icon"> ${schedule.instructor || 'TBA'}</div>
                 </div>
             `;
 
-            card.querySelector('.remove-mobile-btn').onclick = async (e) => {
+            card.querySelector('.remove-mobile-btn').onclick = (e) => {
                 e.stopPropagation();
-                const courseName = `${course.subject} ${course.courseCode}`;
-                const confirmed = await showConfirmModal(
-                    'Remove Course',
-                    `Remove ${courseName} from your schedule?`
-                );
-                if (confirmed) {
-                    // Remove from both grid and mobile list
-                    document.querySelectorAll('.course-box').forEach(b => {
-                        if (b.dataset.courseCode === courseName) b.remove();
-                    });
-                    document.querySelectorAll('.mobile-course-card').forEach(c => {
-                        if (c.dataset.courseCode === courseName) c.remove();
-                    });
-                    updateSuggestedCourses();
-                }
+                removeCourse(codeStr);
             };
 
-            dayGroup.appendChild(card);
+            group.appendChild(card);
         });
 
-        mobileList.appendChild(dayGroup);
+        list.appendChild(group);
     });
 
-    container.appendChild(mobileList);
+    container.appendChild(list);
 }
 
-// Show suggested course buttons
-function showSuggestedCourses(codes) {
-    const container = document.getElementById('suggestedButtons');
-    if (!container) return;
+// ==========================================
+// COURSE FETCHING & FILTERING
+// ==========================================
 
-    container.innerHTML = '';
+function populateTimeFilter() {
+    const select = document.getElementById('filterStartTime');
+    if (!select) return;
 
-    if (codes.length === 0) {
-        container.innerHTML = '<em class="all-found-msg">All required courses found in your schedule!</em>';
-        return;
+    for (let min = 8 * 60; min <= 22 * 60; min += 30) {
+        const h = Math.floor(min / 60);
+        const m = min % 60;
+        const h12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const val = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+        const label = `${h12}:${m.toString().padStart(2, '0')} ${ampm}`;
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = label;
+        select.appendChild(opt);
     }
-
-    codes.forEach(code => {
-        const btn = document.createElement('button');
-        btn.textContent = code;
-        btn.onclick = () => showSectionChoices(code);
-        container.appendChild(btn);
-    });
 }
 
-// Format day codes to readable text (sorted in UMTWR order)
-function formatDays(days) {
-    const dayNames = {
-        U: 'Sun', M: 'Mon', T: 'Tue', W: 'Wed', R: 'Thu'
-    };
-    // Sort days in UMTWR order before formatting
-    const sortedDays = days.split('')
-        .sort((a, b) => (DAY_ORDER[a] ?? 99) - (DAY_ORDER[b] ?? 99));
-    return sortedDays.map(d => dayNames[d] || d).join(', ');
-}
-
-// Show section choices in modal with improved info display
 async function showSectionChoices(code) {
     const gender = document.getElementById('gender').value;
     const modal = document.getElementById('modal');
     const titleSpan = document.getElementById('modalTitle')?.querySelector('span');
     const list = document.getElementById('sectionList');
-    const filtersPanel = document.getElementById('filtersPanel');
 
-    if (!modal || !titleSpan || !list) return;
+    if (!modal || !list) return;
 
     titleSpan.textContent = code;
     list.innerHTML = '<p class="loading-msg">Loading sections...</p>';
+    modal.style.display = 'flex';
 
-    // Reset and hide filters
-    if (filtersPanel) filtersPanel.style.display = 'none';
     document.getElementById('filterInstructor').value = '';
     document.getElementById('filterSection').value = '';
     document.getElementById('filterCrn').value = '';
     document.getElementById('filterStartTime').value = '';
-    document.getElementById('filterConflict').checked = false;
+    document.getElementById('filterConflict').checked = true;
     document.querySelectorAll('input[name="filterDay"]').forEach(cb => cb.checked = false);
 
-    modal.style.display = 'flex';
-
     try {
+        const cleanCode = code.replace('-', '');
         const apiUrl = new URL('https://api.kauindex.com/search');
         apiUrl.searchParams.append('termCode', '202602');
-        apiUrl.searchParams.append('q', code.replace('-', ''));
+        apiUrl.searchParams.append('q', cleanCode);
         apiUrl.searchParams.append('gender', gender);
         apiUrl.searchParams.append('limit', '50');
 
         const response = await fetch(apiUrl);
-        if (!response.ok) throw new Error();
-
         const result = await response.json();
         list.innerHTML = '';
 
         if (result.data.length === 0) {
-            list.innerHTML = '<p class="no-results-msg">No sections found for this course.</p>';
+            list.innerHTML = '<p class="no-results-msg">No sections found.</p>';
             return;
         }
 
@@ -554,514 +556,260 @@ async function showSectionChoices(code) {
             const card = document.createElement('div');
             card.className = 'section-card';
 
-            // Add data attributes for filtering
-            const schedDays = course.schedules.map(s => s.days || '').join('');
-            const schedStartTime = course.schedules[0]?.time?.split(' - ')[0] || '';
-            const schedTimeValue = schedStartTime.replace(/(\d{1,2}):(\d{2}) ([AP]M)/, (_, h, m, ap) => {
-                let hour = parseInt(h);
-                if (ap === 'PM' && hour !== 12) hour += 12;
-                if (ap === 'AM' && hour === 12) hour = 0;
-                return `${hour.toString().padStart(2, '0')}:${m}`;
-            });
+            const thisCourseCode = formatCourseCode(course.subject, course.courseCode);
+            const conflict = findConflict(course);
 
-            card.dataset.instructor = course.schedules[0]?.instructor || course.primaryInstructor || '';
-            card.dataset.section = course.section || '';
-            card.dataset.days = schedDays;
-            card.dataset.startTime = schedTimeValue;
+            if (conflict) card.classList.add('has-conflict');
+
+            card.dataset.instructor = (course.schedules[0]?.instructor || course.primaryInstructor || '').toLowerCase();
+            card.dataset.section = (course.section || '').toUpperCase();
             card.dataset.crn = course.crn || '';
-            card.dataset.credits = course.credits || '';
 
-            // Check for conflicts with courses already on the grid
-            const existingCourses = getCoursesOnGrid();
-            let sectionHasConflict = false;
-            let conflictReason = '';
-
-            // Check if same subject code already exists
-            const courseCode = `${course.subject} ${course.courseCode}`;
-            if (existingCourses.some(c => c === courseCode)) {
-                sectionHasConflict = true;
-                conflictReason = 'Same course';
+            const firstTime = course.schedules[0]?.time?.split(' - ')[0] || '';
+            const m = firstTime.match(/(\d+):(\d+) ([AP]M)/);
+            if (m) {
+                let h = parseInt(m[1]);
+                if (m[3] === 'PM' && h !== 12) h += 12;
+                if (m[3] === 'AM' && h === 12) h = 0;
+                card.dataset.startTime = `${h.toString().padStart(2, '0')}:${m[2]}`;
             }
 
-            // Check for time/day conflicts with existing courses
-            if (!sectionHasConflict) {
-                const allExistingBoxes = document.querySelectorAll('.course-box');
-                course.schedules.forEach(sched => {
-                    if (!sched.days || !sched.time) return;
-                    const newParsed = parseScheduleTime(sched);
-                    if (!newParsed) return;
+            card.dataset.days = course.schedules.map(s => s.days).join('');
 
-                    allExistingBoxes.forEach(box => {
-                        const boxDays = box.dataset.days || '';
-                        const boxStart = parseInt(box.dataset.startMin) || 0;
-                        const boxEnd = parseInt(box.dataset.endMin) || 0;
-
-                        // Check day overlap
-                        const daysOverlap = sched.days.split('').some(d => boxDays.includes(d));
-                        if (daysOverlap && timeRangesOverlap(newParsed.startMin, newParsed.endMin, boxStart, boxEnd)) {
-                            sectionHasConflict = true;
-                            conflictReason = 'Time Conflict';
-                        }
-                    });
-                });
-            }
-
-            if (sectionHasConflict) {
-                card.classList.add('has-conflict');
-            }
-
-            // Section header with course name on left, section/CRN on right
-            const header = document.createElement('div');
-            header.className = 'section-header';
-            header.innerHTML = `
-                <span class="section-course-name">${course.subject}-${course.courseCode}</span>
-                <span class="section-info-right">
-                    ${sectionHasConflict ? `<span class="conflict-warning">${conflictReason}</span>` : ''}
-                    <span class="section-number">${course.section || '??'}</span>
-                    <span class="section-crn">${course.crn || '??'}</span>
-                </span>
+            card.innerHTML = `
+                <div class="section-header">
+                    <span class="section-course-name">${thisCourseCode}</span>
+                    <div class="section-info-right">
+                        ${conflict?.type === 'same' ? '<span class="conflict-warning">Same Course</span>' : ''}
+                        ${conflict?.type === 'time' ? '<span class="conflict-warning">Time Conflict</span>' : ''}
+                        <span class="section-number">${course.section}</span>
+                        <span class="section-crn">${course.crn}</span>
+                        <span class="credits-badge">${course.credits} H</span>
+                    </div>
+                </div>
+                <div class="section-details">
+                    ${course.schedules.map(s => `
+                        <div class="schedule-row">
+                            <div class="detail-row"><span class="detail-label"><img src="icons/days.png" class="section-icon"> Days:</span><span class="detail-value">${formatDays(s.days)}</span></div>
+                            <div class="detail-row"><span class="detail-label"><img src="icons/time.png" class="section-icon"> Time:</span><span class="detail-value">${s.time}</span></div>
+                            <div class="detail-row"><span class="detail-label"><img src="icons/location.png" class="section-icon"> Location:</span><span class="detail-value">${s.room || 'TBA'}</span></div>
+                            <div class="detail-row"><span class="detail-label"><img src="icons/instructor.png" class="section-icon"> Instructor:</span><span class="detail-value">${s.instructor || course.primaryInstructor || 'TBA'}</span></div>
+                        </div>
+                    `).join('')}
+                </div>
             `;
-            card.appendChild(header);
 
-            // Section details
-            const details = document.createElement('div');
-            details.className = 'section-details';
+            const btn = document.createElement('button');
+            btn.className = 'add-section-btn';
+            btn.textContent = conflict ? 'REPLACE EXISTING' : 'ADD THIS SECTION';
+            btn.onclick = () => handleCourseAddition(course);
 
-            // Schedule info for each time slot
-            course.schedules.forEach(sched => {
-                const schedRow = document.createElement('div');
-                schedRow.className = 'schedule-row';
-                schedRow.innerHTML = `
-                    <div class="detail-row">
-                        <span class="detail-label"><img src="icons/days.png" alt="" class="section-icon"> Days:</span>
-                        <span class="detail-value">${formatDays(sched.days)}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label"><img src="icons/time.png" alt="" class="section-icon"> Time:</span>
-                        <span class="detail-value">${sched.time}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label"><img src="icons/location.png" alt="" class="section-icon"> Location:</span>
-                        <span class="detail-value">${sched.room || 'TBA'}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label"><img src="icons/instructor.png" alt="" class="section-icon"> Instructor:</span>
-                        <span class="detail-value">${sched.instructor || course.primaryInstructor || 'TBA'}</span>
-                    </div>
-                    ${course.credits ? `<div class="detail-row">
-                        <span class="detail-label"><img src="icons/credits.png" alt="" class="section-icon"> Credits:</span>
-                        <span class="detail-value">${course.credits}</span>
-                    </div>` : ''}
-                    </div>
-                `;
-                details.appendChild(schedRow);
-            });
-
-            card.appendChild(details);
-
-            // Add button
-            const addBtn = document.createElement('button');
-            addBtn.textContent = 'ADD THIS SECTION';
-            addBtn.className = 'add-section-btn';
-            addBtn.onclick = async () => {
-                const conflict = hasConflict(course);
-                if (conflict) {
-                    const confirmed = await showConfirmModal(
-                        'Conflict Detected',
-                        `This course overlaps with "${conflict}". Remove "${conflict}" and add this course instead?`
-                    );
-                    if (!confirmed) return;
-                    removeConflictingCourse(conflict);
-                }
-                addCourseToGrid(course);
-                modal.style.display = 'none';
-                updateSuggestedCourses();
-            };
-            card.appendChild(addBtn);
-
+            card.appendChild(btn);
             list.appendChild(card);
         });
 
-    } catch (error) {
-        list.innerHTML = '<p class="error-msg">Error loading sections. Please try again.</p>';
+        applyFilters();
+
+    } catch (e) {
+        list.innerHTML = '<p class="error-msg">Error fetching sections.</p>';
     }
 }
 
-// Get all courses currently on the grid
+function applyFilters() {
+    const instr = document.getElementById('filterInstructor').value.toLowerCase();
+    const sec = document.getElementById('filterSection').value.toUpperCase();
+    const crn = document.getElementById('filterCrn').value;
+    const start = document.getElementById('filterStartTime').value;
+    const hideConf = document.getElementById('filterConflict').checked;
+
+    const selectedDays = Array.from(document.querySelectorAll('input[name="filterDay"]:checked')).map(c => c.value);
+
+    document.querySelectorAll('.section-card').forEach(card => {
+        let show = true;
+        if (instr && !card.dataset.instructor.includes(instr)) show = false;
+        if (sec && !card.dataset.section.includes(sec)) show = false;
+        if (crn && !card.dataset.crn.includes(crn)) show = false;
+        if (start && card.dataset.startTime !== start) show = false;
+        if (hideConf && card.classList.contains('has-conflict')) show = false;
+
+        // Exact Day Match Logic
+        if (selectedDays.length > 0) {
+            const courseDays = card.dataset.days.split('');
+            // Check 1: Length must be equal
+            // Check 2: All selected days must be in course days (and vice versa by length check)
+            const exactMatch = (courseDays.length === selectedDays.length) && selectedDays.every(d => courseDays.includes(d));
+            if (!exactMatch) show = false;
+        }
+
+        card.style.display = show ? 'block' : 'none';
+    });
+}
+
+// ==========================================
+// HELPERS
+// ==========================================
+
+function getCoursesOnGrid() {
+    const codes = new Set();
+    document.querySelectorAll('.course-box').forEach(box => {
+        codes.add(box.dataset.courseCode);
+    });
+    return [...codes];
+}
+
 function getAllCoursesFromGrid() {
     const courses = [];
-    const seenCRNs = new Set();
-
+    const seen = new Set();
     document.querySelectorAll('.course-box').forEach(box => {
-        // Store course data in dataset for reconstruction
-        const courseData = box.courseData;
-        if (courseData && !seenCRNs.has(courseData.crn)) {
-            seenCRNs.add(courseData.crn);
-            courses.push(courseData);
+        if (!seen.has(box.courseData.crn)) {
+            courses.push(box.courseData);
+            seen.add(box.courseData.crn);
         }
     });
-
     return courses;
 }
 
-// Check if course requires time range expansion
-function needsTimeRangeExpansion(course) {
-    for (const schedule of course.schedules) {
-        const parsed = parseScheduleTime(schedule);
-        if (!parsed) continue;
+function updateSuggestedCourses() {
+    if (!currentMajor || !currentTerm) return;
+    const onGrid = getCoursesOnGrid();
 
-        const startHour = Math.floor(parsed.startMin / 60);
-        const endHour = Math.ceil(parsed.endMin / 60);
+    const req = termSubjects[currentMajor]?.[currentTerm] || [];
+    const sugg = alwaysSuggested[currentMajor]?.[currentTerm] || [];
+    const all = [...new Set([...req, ...sugg])];
 
-        if (startHour < currentTimeRange.startHour + TIME_PADDING_HOURS ||
-            endHour > currentTimeRange.endHour - TIME_PADDING_HOURS) {
-            return true;
-        }
-    }
-    return false;
-}
+    const missing = all.filter(code => !onGrid.includes(code));
 
-// Add course to existing grid (or rebuild if time range needs expansion)
-function addCourseToGrid(course) {
-    // Check if we need to expand the time range
-    if (needsTimeRangeExpansion(course)) {
-        // Collect all existing courses
-        const existingCourses = getAllCoursesFromGrid();
-        existingCourses.push(course);
+    const div = document.getElementById('suggestedButtons');
+    div.innerHTML = '';
 
-        // Rebuild the entire grid with new time range
-        displayCourses(existingCourses);
+    if (missing.length === 0) {
+        div.innerHTML = '<em class="all-found-msg">All suggested courses added!</em>';
         return;
     }
 
-    // Otherwise, just add to existing grid
-    const gridBody = document.querySelector('.grid-body');
-    if (!gridBody) return;
-
-    course.schedules.forEach(schedule => {
-        const parsed = parseScheduleTime(schedule);
-        if (!parsed) return;
-
-        const courseDays = parsed.days.split('').map(d => DAY_MAP[d] || '').filter(Boolean);
-
-        courseDays.forEach(day => {
-            const dayColumn = gridBody.querySelector(`.day-column[data-day="${day}"]`);
-            if (dayColumn) {
-                const box = createCourseBox(course, parsed, true);
-                box.courseData = course; // Store for later reconstruction
-                dayColumn.appendChild(box);
-            }
-        });
-    });
-
-    // Regenerate mobile schedule list with all current courses
-    const allCourses = getAllCoursesFromGrid();
-    const container = document.getElementById('timetableContainer');
-    if (container) {
-        generateMobileScheduleList(allCourses, container);
-    }
-}
-
-// Check for time conflicts
-function hasConflict(newCourse) {
-    const gridBody = document.querySelector('.grid-body');
-    if (!gridBody) return null;
-
-    const existingBoxes = gridBody.querySelectorAll('.course-box');
-    const newCourseCode = `${newCourse.subject} ${newCourse.courseCode}`;
-
-    // Check for same course (duplicate subject code)
-    for (const box of existingBoxes) {
-        if (box.dataset.courseCode === newCourseCode) {
-            return newCourseCode + ' (duplicate)';
-        }
-    }
-
-    // Check for time/day conflicts
-    for (const sched of newCourse.schedules) {
-        const parsed = parseScheduleTime(sched);
-        if (!parsed) continue;
-
-        const newDays = parsed.days.split('');
-
-        for (const box of existingBoxes) {
-            const existingDays = (box.dataset.days || '').split('');
-            const existingStart = parseInt(box.dataset.startMin);
-            const existingEnd = parseInt(box.dataset.endMin);
-
-            if (isNaN(existingStart) || isNaN(existingEnd)) continue;
-
-            const daysOverlap = newDays.some(d => existingDays.includes(d));
-            if (!daysOverlap) continue;
-
-            if (timeRangesOverlap(parsed.startMin, parsed.endMin, existingStart, existingEnd)) {
-                return box.dataset.courseCode;
-            }
-        }
-    }
-    return null;
-}
-
-// Remove conflicting course
-function removeConflictingCourse(courseCode) {
-    const gridBody = document.querySelector('.grid-body');
-    if (!gridBody) return;
-
-    gridBody.querySelectorAll('.course-box').forEach(box => {
-        if (box.dataset.courseCode === courseCode) box.remove();
+    missing.forEach(code => {
+        const btn = document.createElement('button');
+        btn.textContent = code;
+        btn.onclick = () => showSectionChoices(code);
+        div.appendChild(btn);
     });
 }
 
-// Set loading state
-function setLoadingState(loading) {
-    const submitBtn = document.querySelector('#blockForm button[type="submit"]');
-    if (submitBtn) {
-        submitBtn.disabled = loading;
-        submitBtn.textContent = loading ? 'Loading...' : 'Load Block Schedule';
-    }
+function addCourseToGrid(course) {
+    const current = getAllCoursesFromGrid();
+    current.push(course);
+    displayCourses(current);
 }
 
-// Initialize event listeners
+// ==========================================
+// INITIALIZATION
+// ==========================================
+
 document.addEventListener('DOMContentLoaded', () => {
+    populateTimeFilter();
 
-    // Theme toggle
     const themeToggle = document.getElementById('themeToggle');
-    const themeIcon = themeToggle?.querySelector('.theme-icon');
-
-    // Initialize theme from localStorage
     const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'light') {
-        document.body.setAttribute('data-theme', 'light');
-        if (themeIcon) themeIcon.textContent = '🌙';
-    }
+    if (savedTheme === 'light') document.body.setAttribute('data-theme', 'light');
 
     themeToggle?.addEventListener('click', () => {
         const isLight = document.body.getAttribute('data-theme') === 'light';
         if (isLight) {
             document.body.removeAttribute('data-theme');
             localStorage.setItem('theme', 'dark');
-            if (themeIcon) themeIcon.textContent = '☀️';
         } else {
             document.body.setAttribute('data-theme', 'light');
             localStorage.setItem('theme', 'light');
-            if (themeIcon) themeIcon.textContent = '🌙';
         }
     });
 
-    // Filter toggle in modal
-    document.getElementById('filterToggle')?.addEventListener('click', () => {
-        const panel = document.getElementById('filtersPanel');
-        if (panel) {
-            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    ['filterInstructor', 'filterSection', 'filterCrn', 'filterStartTime', 'filterConflict'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', applyFilters);
+            el.addEventListener('change', applyFilters);
         }
     });
+    document.querySelectorAll('input[name="filterDay"]').forEach(cb => cb.addEventListener('change', applyFilters));
 
-    // Filter functionality - filter section cards as user types/selects
-    function applyFilters() {
-        const instructorFilter = document.getElementById('filterInstructor')?.value.toLowerCase() || '';
-        const sectionFilter = document.getElementById('filterSection')?.value.toUpperCase() || '';
-        const crnFilter = document.getElementById('filterCrn')?.value || '';
-        const startTimeFilter = document.getElementById('filterStartTime')?.value || '';
-        const hideConflicting = document.getElementById('filterConflict')?.checked || false;
-
-        // Get selected days (multi-select checkboxes)
-        const dayCheckboxes = document.querySelectorAll('input[name="filterDay"]:checked');
-        const selectedDays = Array.from(dayCheckboxes).map(cb => cb.value);
-
-        document.querySelectorAll('.section-card').forEach(card => {
-            const instructor = card.dataset.instructor?.toLowerCase() || '';
-            const section = card.dataset.section?.toUpperCase() || '';
-            const days = card.dataset.days || '';
-            const startTime = card.dataset.startTime || '';
-            const crn = card.dataset.crn || '';
-            const hasConflict = card.classList.contains('has-conflict');
-
-            let show = true;
-
-            if (instructorFilter && !instructor.includes(instructorFilter)) show = false;
-            if (sectionFilter && !section.includes(sectionFilter)) show = false;
-            if (crnFilter && !crn.includes(crnFilter)) show = false;
-            if (startTimeFilter && startTime < startTimeFilter) show = false;
-            if (hideConflicting && hasConflict) show = false;
-
-            // Multi-day filter: show if card has ANY of the selected days
-            if (selectedDays.length > 0) {
-                const hasMatchingDay = selectedDays.some(day => days.includes(day));
-                if (!hasMatchingDay) show = false;
-            }
-
-            card.style.display = show ? 'block' : 'none';
-        });
-    }
-
-    // Attach filter event listeners
-    ['filterInstructor', 'filterSection', 'filterCredits', 'filterStartTime', 'filterConflict'].forEach(id => {
-        document.getElementById(id)?.addEventListener('input', applyFilters);
-        document.getElementById(id)?.addEventListener('change', applyFilters);
-    });
-
-    // Day checkboxes listener
-    document.querySelectorAll('input[name="filterDay"]').forEach(cb => {
-        cb.addEventListener('change', applyFilters);
-    });
-
-
-    // Major selection
     document.getElementById('major')?.addEventListener('change', function () {
-        const major = this.value;
-        currentMajor = major;
+        currentMajor = this.value;
         const blockSelect = document.getElementById('block');
-        if (!blockSelect) return;
-
         blockSelect.innerHTML = '<option value="">Select Block</option>';
-
-        if (major && blocksByMajor[major]) {
-            blocksByMajor[major].forEach(block => {
-                const option = document.createElement('option');
-                option.value = block;
-                option.textContent = block;
-                blockSelect.appendChild(option);
-            });
-        }
+        (blocksByMajor[this.value] || []).forEach(b => {
+            blockSelect.innerHTML += `<option value="${b}">${b}</option>`;
+        });
     });
 
-    // Year selection - populate term dropdown
     document.getElementById('year')?.addEventListener('change', function () {
-        const year = parseInt(this.value);
+        const y = parseInt(this.value);
         const termSelect = document.getElementById('term');
-        if (!termSelect) return;
-
         termSelect.innerHTML = '<option value="">Select Term</option>';
-
-        if (year === 2) {
-            // Year 2 only has Term 2 (which is internal term 4)
+        if (y === 2) {
             termSelect.innerHTML += '<option value="4">Term 2 (First in Major)</option>';
-        } else if (year >= 3 && year <= 5) {
-            // Years 3-5 have Term 1 and Term 2
-            const baseTermValue = (year - 3) * 2 + 5; // Year 3 = 5,6; Year 4 = 7,8; Year 5 = 9,10
-            termSelect.innerHTML += `<option value="${baseTermValue}">Term 1</option>`;
-            termSelect.innerHTML += `<option value="${baseTermValue + 1}">Term 2</option>`;
+        } else if (y >= 3) {
+            const base = (y - 3) * 2 + 5;
+            termSelect.innerHTML += `<option value="${base}">Term 1</option>`;
+            termSelect.innerHTML += `<option value="${base + 1}">Term 2</option>`;
         }
     });
 
-    // Term selection
-    document.getElementById('term')?.addEventListener('change', function () {
-        currentTerm = this.value;
-    });
+    document.getElementById('term')?.addEventListener('change', function () { currentTerm = this.value; });
 
-    // Form submission
     document.getElementById('blockForm')?.addEventListener('submit', async function (e) {
         e.preventDefault();
-
         const gender = document.getElementById('gender').value;
-        const term = document.getElementById('term').value;
-        const major = document.getElementById('major').value;
         const block = document.getElementById('block').value;
 
-        if (!gender || !term || !major || !block) {
-            alert("Please fill all fields!");
-            return;
-        }
+        if (!gender || !currentMajor || !currentTerm || !block) return alert('Fill all fields');
 
-        currentMajor = major;
-        currentTerm = term;
-
-        console.log("Loading schedule for:", { gender, term, major, block });
-        setLoadingState(true);
-
-        const container = document.getElementById('timetableContainer');
-        if (container) container.innerHTML = '<p class="loading-msg">Loading your block schedule...</p>';
+        const btn = this.querySelector('button');
+        btn.textContent = 'Loading...';
+        btn.disabled = true;
 
         try {
-            const apiUrl = new URL('https://api.kauindex.com/search');
-            apiUrl.searchParams.append('termCode', '202602');
-            apiUrl.searchParams.append('section', block);
-            apiUrl.searchParams.append('gender', gender);
-            apiUrl.searchParams.append('level', 'بكالوريوس');
-            apiUrl.searchParams.append('limit', '100');
+            const url = `https://api.kauindex.com/search?termCode=202602&section=${block}&gender=${gender}&level=بكالوريوس&limit=100`;
+            const res = await fetch(url);
+            const json = await res.json();
 
-            const response = await fetch(apiUrl);
-            if (!response.ok) throw new Error(`API error: ${response.status}`);
-
-            const result = await response.json();
-
-            if (result.status !== 'success' || !result.data || result.data.length === 0) {
-                if (container) container.innerHTML = '<p class="no-results-msg">No courses found for this block. Try another?</p>';
-                setLoadingState(false);
-                return;
+            if (json.status === 'success' && json.data.length) {
+                const req = termSubjects[currentMajor][currentTerm];
+                const filtered = json.data.filter(c => req.includes(formatCourseCode(c.subject, c.courseCode)));
+                displayCourses(filtered);
+                updateSuggestedCourses();
+            } else {
+                alert('No schedule found for this block.');
             }
-
-            const requiredBlockCodes = termSubjects[major]?.[term] || [];
-            const filteredCourses = result.data.filter(course =>
-                requiredBlockCodes.includes(`${course.subject}-${course.courseCode}`)
-            );
-
-            const fetchedCodes = result.data.map(c => `${c.subject}-${c.courseCode}`);
-            const missingBlock = requiredBlockCodes.filter(code => !fetchedCodes.includes(code));
-            const alwaysSuggest = alwaysSuggested[major]?.[term] || [];
-            const allSuggestions = [...new Set([...missingBlock, ...alwaysSuggest])];
-
-            currentSuggestions = allSuggestions;
-
-            displayCourses(filteredCourses.length > 0 ? filteredCourses : []);
-            showSuggestedCourses(allSuggestions);
-
-        } catch (error) {
-            console.error(error);
-            if (container) container.innerHTML = '<p class="error-msg">Error loading schedule. Check console or try again later.</p>';
+        } catch (err) {
+            alert('Error loading schedule.');
         } finally {
-            setLoadingState(false);
+            btn.textContent = 'Load Block Schedule';
+            btn.disabled = false;
         }
     });
 
-    // Manual course search
-    document.getElementById('fetchBtn')?.addEventListener('click', () => {
-        const input = document.getElementById('courseInput');
-        const code = input?.value.trim().toUpperCase();
-        if (code) {
-            showSectionChoices(code);
-            input.value = '';
+    const performSearch = () => {
+        const val = document.getElementById('courseInput').value.trim().toUpperCase();
+        if (val) {
+            const formatted = val.includes('-') ? val : val.replace(/([A-Z]+)(\d+)/, '$1-$2');
+            showSectionChoices(formatted);
+            document.getElementById('courseInput').value = '';
         }
-    });
+    };
+    document.getElementById('fetchBtn')?.addEventListener('click', performSearch);
+    document.getElementById('courseInput')?.addEventListener('keypress', e => { if (e.key === 'Enter') performSearch(); });
 
-    // Enter key in search
-    document.getElementById('courseInput')?.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            document.getElementById('fetchBtn')?.click();
-        }
-    });
-
-    // Reset schedule (always resets even when no courses)
     document.getElementById('clearScheduleBtn')?.addEventListener('click', async () => {
-        const courseBoxes = document.querySelectorAll('.course-box');
+        const confirmed = await showConfirmModal('Reset Schedule', 'Clear entire schedule?');
 
-        // Only show confirmation if there are courses to remove
-        if (courseBoxes.length > 0) {
-            const confirmed = await showConfirmModal(
-                'Reset Schedule',
-                'Are you sure you want to reset and start over?'
-            );
-            if (!confirmed) return;
+        if (confirmed) {
+            document.getElementById('timetableContainer').innerHTML = '';
+            document.getElementById('scheduleControls').classList.add('hidden');
+            document.querySelector('section').style.display = 'none';
+            document.querySelector('main').style.display = 'block';
+            document.getElementById('blockForm').reset();
+            currentMajor = null;
+            currentTerm = null;
         }
-
-        // Remove all courses
-        courseBoxes.forEach(box => box.remove());
-
-        // Hide schedule and suggestions, show form
-        document.getElementById('timetableContainer').innerHTML = '';
-        document.getElementById('scheduleControls').classList.add('hidden');
-        document.querySelector('section').style.display = 'none';
-        document.querySelector('main').style.display = 'block';
-
-        // Reset form selections
-        document.getElementById('year').value = '';
-        document.getElementById('term').innerHTML = '<option value="">Term</option>';
-        document.getElementById('major').value = '';
-        document.getElementById('block').innerHTML = '<option value="">Select Block</option>';
-
-        currentMajor = null;
-        currentTerm = null;
-        currentSuggestions = [];
     });
 });
