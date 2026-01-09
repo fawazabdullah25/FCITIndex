@@ -64,6 +64,67 @@ const alwaysSuggested = {
     }
 };
 
+// Female-specific course lists (temporary - can be customized)
+const termSubjectsFemale = {
+    CS: {
+        4: ['CPCS-203', 'CPCS-222'],
+        5: ['CPCS-204', 'CPCS-211', 'CPCS-212'],
+        6: ['CPCS-214', 'CPCS-223', 'CPCS-241', 'CPCS-301'],
+        7: ['CPCS-324', 'CPCS-351', 'CPCS-331', 'CPCS-361', 'CPCS-371'],
+        8: ['CPCS-302', 'CPCS-381', 'CPCS-391'],
+        9: [],
+        10: ['CPIS-428']
+    },
+    IT: {
+        4: ['CPCS-203', 'CPCS-222', 'CPIT-220'],
+        5: ['CPCS-204', 'CPIT-210'],
+        6: ['CPIT-240', 'CPIT-250', 'CPIT-260', 'CPIT-285'],
+        7: ['CPIT-251', 'CPIT-280', 'CPIT-370', 'CPIS-393'],
+        8: ['CPIT-252', 'CPIT-330', 'CPIT-380', 'CPIT-305', 'CPIT-425', 'CPIS-334'],
+        9: ['CPIT-405', 'CPIT-345'],
+        10: ['CPIT-435']
+    },
+    IS: {
+        4: ['CPCS-222', 'CPCS-203', 'CPIS-220'],
+        5: ['CPCS-204', 'CPIS-210'],
+        6: ['CPIS-222', 'CPIS-240', 'CPIS-250', 'CPIS-370'],
+        7: ['CPIS-351', 'CPIS-354', 'CPIS-358', 'CPIS-393', 'CPIS-334'],
+        8: ['CPIS-357', 'CPIS-312', 'CPIS-352', 'CPIS-380'],
+        9: ['CPIS-428', 'CPIS-342'],
+        10: ['CPIS-434']
+    }
+};
+
+const alwaysSuggestedFemale = {
+    CS: {
+        4: ['ARAB-101', 'ISLS-201', 'MATH-202'],
+        5: ['PHYS-202', 'CHEM-202', 'BIO-202', 'BIOC-371'],
+        6: ['STAT-352'],
+        7: ['CPIS-334'],
+        8: ['ISLS-301', 'CPIS-393'],
+        9: ['ARAB-201', 'CPCS-498'],
+        10: ['CPCS-499', 'ISLS-401']
+    },
+    IT: {
+        4: ['ARAB-101', 'ISLS-201'],
+        5: ['ISLS-301', 'ARAB-201'],
+        6: ['CPIT-210', 'CPIT-220', 'CPIS-334'],
+        7: ['ISLS-401', 'CPIT-210', 'CPIT-220', 'CPIT-260', 'CPIT-340', 'CPIT-456', 'CPIT-380'],
+        8: ['CPIT-240'],
+        9: ['CPIT-498', 'CPIS-393', 'CPIT-456', 'CPIT-425'],
+        10: ['CPIT-499', 'CPIS-428', 'CPIT-470', 'CPIT-260', 'CPIT-340', 'CPIT-456', 'CPIT-380']
+    },
+    IS: {
+        4: ['BUS-232', 'ARAB-101', 'ISLS-201'],
+        5: ['MRKT-260'],
+        6: ['ACCT-333'],
+        7: [],
+        8: ['ARAB-201'],
+        9: ['CPIS-498', 'ISLS-301'],
+        10: ['CPIS-499', 'ISLS-401']
+    }
+};
+
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
 const DAY_MAP = { U: 'Sunday', M: 'Monday', T: 'Tuesday', W: 'Wednesday', R: 'Thursday' };
 const DAY_ORDER = { U: 0, M: 1, T: 2, W: 3, R: 4 };
@@ -75,6 +136,86 @@ let currentTerm = null;
 let currentTimeRange = { startHour: 8, endHour: 17 };
 let undoStack = [];
 let undoTimeout = null;
+
+// ==========================================
+// FORM PERSISTENCE
+// ==========================================
+
+let isRestoring = false;
+
+function saveFormState() {
+    // Don't save during restore to prevent overwriting with empty dependent values
+    if (isRestoring) return;
+
+    const state = {
+        gender: document.getElementById('gender')?.value || '',
+        year: document.getElementById('year')?.value || '',
+        term: document.getElementById('term')?.value || '',
+        major: document.getElementById('major')?.value || '',
+        block: document.getElementById('block')?.value || ''
+    };
+    localStorage.setItem('formState', JSON.stringify(state));
+}
+
+function restoreFormState() {
+    const saved = localStorage.getItem('formState');
+    if (!saved) return;
+
+    isRestoring = true; // Prevent saveFormState from being called during restore
+
+    try {
+        const state = JSON.parse(saved);
+
+        // Step 1: Restore gender and dispatch change to trigger block disable for female
+        if (state.gender) {
+            const genderEl = document.getElementById('gender');
+            genderEl.value = state.gender;
+            genderEl.dispatchEvent(new Event('change'));
+        }
+
+        // Step 2: Restore year (triggers term dropdown population)
+        setTimeout(() => {
+            if (state.year) {
+                const yearEl = document.getElementById('year');
+                yearEl.value = state.year;
+                yearEl.dispatchEvent(new Event('change'));
+            }
+
+            // Step 3: Restore major (triggers block dropdown population)
+            setTimeout(() => {
+                if (state.major) {
+                    const majorEl = document.getElementById('major');
+                    majorEl.value = state.major;
+                    currentMajor = state.major;
+                    majorEl.dispatchEvent(new Event('change'));
+                }
+
+                // Step 4: Restore term (after year's change event populated it)
+                setTimeout(() => {
+                    if (state.term) {
+                        document.getElementById('term').value = state.term;
+                        currentTerm = state.term;
+                    }
+
+                    // Step 5: Restore block (only for male - female gets "Coming Soon")
+                    setTimeout(() => {
+                        const blockSelect = document.getElementById('block');
+                        if (state.gender === 'female') {
+                            blockSelect.innerHTML = '<option value="female-mode" selected>Coming Soon</option>';
+                            blockSelect.disabled = true;
+                        } else if (state.block) {
+                            blockSelect.value = state.block;
+                        }
+                        isRestoring = false; // Re-enable saving
+                    }, 50);
+                }, 50);
+            }, 50);
+        }, 50);
+    } catch (e) {
+        console.warn('Could not restore form state');
+        isRestoring = false;
+    }
+}
 
 // ==========================================
 // UTILITY FUNCTIONS
@@ -172,9 +313,15 @@ function removeCourse(courseCode) {
     const courseData = boxes[0].courseData;
     undoStack.push(courseData);
 
-    // Remove
+    // Remove from grid
     document.querySelectorAll(`.course-box[data-course-code="${courseCode}"]`).forEach(b => b.remove());
-    document.querySelectorAll(`.mobile-course-card[data-course-code="${courseCode}"]`).forEach(c => c.remove());
+
+    // Regenerate mobile list to remove empty day groups
+    const container = document.getElementById('timetableContainer');
+    if (container) {
+        const allCourses = getAllCoursesFromGrid();
+        generateMobileScheduleList(allCourses, container);
+    }
 
     updateSuggestedCourses();
     showToast(`Removed ${courseCode}`);
@@ -491,6 +638,11 @@ function generateMobileScheduleList(courses, container) {
         list.appendChild(group);
     });
 
+    // Show empty message if no courses
+    if (courses.length === 0) {
+        list.innerHTML = '<div class="empty-schedule-msg">No courses added to your schedule yet</div>';
+    }
+
     container.appendChild(list);
 }
 
@@ -514,6 +666,50 @@ function populateTimeFilter() {
         opt.textContent = label;
         select.appendChild(opt);
     }
+}
+
+// Sequential modal flow for female students
+async function showSequentialModals(courses) {
+    for (const code of courses) {
+        await showSectionChoicesAsync(code);
+    }
+}
+
+// Promise-based version of showSectionChoices
+function showSectionChoicesAsync(code) {
+    return new Promise((resolve) => {
+        // Track when modal closes
+        const modal = document.getElementById('modal');
+
+        // Show the section choices
+        showSectionChoices(code);
+
+        // Create a mutation observer to detect when modal is hidden
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.attributeName === 'style') {
+                    if (modal.style.display === 'none' || modal.style.display === '') {
+                        observer.disconnect();
+                        resolve();
+                    }
+                }
+            });
+        });
+
+        observer.observe(modal, { attributes: true, attributeFilter: ['style'] });
+
+        // Also listen for click on close button and add-section buttons
+        const closeHandler = () => {
+            observer.disconnect();
+            modal.style.display = 'none';
+            resolve();
+        };
+
+        const closeBtn = modal.querySelector('.modal-close-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeHandler, { once: true });
+        }
+    });
 }
 
 async function showSectionChoices(code) {
@@ -672,9 +868,14 @@ function getAllCoursesFromGrid() {
 function updateSuggestedCourses() {
     if (!currentMajor || !currentTerm) return;
     const onGrid = getCoursesOnGrid();
+    const gender = document.getElementById('gender').value;
 
-    const req = termSubjects[currentMajor]?.[currentTerm] || [];
-    const sugg = alwaysSuggested[currentMajor]?.[currentTerm] || [];
+    // Use female-specific lists for female users
+    const subjects = gender === 'female' ? termSubjectsFemale : termSubjects;
+    const suggested = gender === 'female' ? alwaysSuggestedFemale : alwaysSuggested;
+
+    const req = subjects[currentMajor]?.[currentTerm] || [];
+    const sugg = suggested[currentMajor]?.[currentTerm] || [];
     const all = [...new Set([...req, ...sugg])];
 
     const missing = all.filter(code => !onGrid.includes(code));
@@ -707,19 +908,28 @@ function addCourseToGrid(course) {
 
 document.addEventListener('DOMContentLoaded', () => {
     populateTimeFilter();
+    restoreFormState();
 
     const themeToggle = document.getElementById('themeToggle');
+    const themeIcon = themeToggle?.querySelector('.theme-icon');
     const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'light') document.body.setAttribute('data-theme', 'light');
+
+    // Set initial theme and icon
+    if (savedTheme === 'light') {
+        document.body.setAttribute('data-theme', 'light');
+        if (themeIcon) themeIcon.src = 'icons/sun.png';
+    }
 
     themeToggle?.addEventListener('click', () => {
         const isLight = document.body.getAttribute('data-theme') === 'light';
         if (isLight) {
             document.body.removeAttribute('data-theme');
             localStorage.setItem('theme', 'dark');
+            if (themeIcon) themeIcon.src = 'icons/moon.png';
         } else {
             document.body.setAttribute('data-theme', 'light');
             localStorage.setItem('theme', 'light');
+            if (themeIcon) themeIcon.src = 'icons/sun.png';
         }
     });
 
@@ -732,13 +942,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.querySelectorAll('input[name="filterDay"]').forEach(cb => cb.addEventListener('change', applyFilters));
 
+    // Mobile filter toggle
+    document.getElementById('mobileFilterToggle')?.addEventListener('click', () => {
+        const panel = document.getElementById('filtersPanel');
+        panel?.classList.toggle('expanded');
+    });
+
     document.getElementById('major')?.addEventListener('change', function () {
         currentMajor = this.value;
         const blockSelect = document.getElementById('block');
+        const gender = document.getElementById('gender').value;
+
+        // Don't repopulate block if female - keep "Coming Soon"
+        if (gender === 'female') {
+            saveFormState();
+            return;
+        }
+
         blockSelect.innerHTML = '<option value="">Select Block</option>';
         (blocksByMajor[this.value] || []).forEach(b => {
             blockSelect.innerHTML += `<option value="${b}">${b}</option>`;
         });
+        saveFormState();
     });
 
     document.getElementById('year')?.addEventListener('change', function () {
@@ -752,36 +977,83 @@ document.addEventListener('DOMContentLoaded', () => {
             termSelect.innerHTML += `<option value="${base}">Term 1</option>`;
             termSelect.innerHTML += `<option value="${base + 1}">Term 2</option>`;
         }
+        saveFormState();
     });
 
-    document.getElementById('term')?.addEventListener('change', function () { currentTerm = this.value; });
+    document.getElementById('term')?.addEventListener('change', function () {
+        currentTerm = this.value;
+        saveFormState();
+    });
+
+    document.getElementById('gender')?.addEventListener('change', function () {
+        const gender = this.value;
+        const blockSelect = document.getElementById('block');
+
+        if (gender === 'female') {
+            blockSelect.innerHTML = '<option value="female-mode" selected>Coming Soon</option>';
+            blockSelect.disabled = true;
+        } else {
+            blockSelect.disabled = false;
+            blockSelect.innerHTML = '<option value="">Select Block</option>';
+            // Repopulate block options if major is selected
+            if (currentMajor && blocksByMajor[currentMajor]) {
+                blocksByMajor[currentMajor].forEach(b => {
+                    blockSelect.innerHTML += `<option value="${b}">${b}</option>`;
+                });
+            }
+        }
+        saveFormState();
+    });
+
+    document.getElementById('block')?.addEventListener('change', saveFormState);
 
     document.getElementById('blockForm')?.addEventListener('submit', async function (e) {
         e.preventDefault();
         const gender = document.getElementById('gender').value;
         const block = document.getElementById('block').value;
 
-        if (!gender || !currentMajor || !currentTerm || !block) return alert('Fill all fields');
+        // Female mode doesn't need block validation - uses "female-mode" value
+        if (gender === 'female') {
+            if (!currentMajor || !currentTerm) return;
+        } else {
+            if (!gender || !currentMajor || !currentTerm || !block) return;
+        }
 
         const btn = this.querySelector('button');
         btn.textContent = 'Loading...';
         btn.disabled = true;
 
         try {
-            const url = `https://api.kauindex.com/search?termCode=202602&section=${block}&gender=${gender}&level=بكالوريوس&limit=100`;
-            const res = await fetch(url);
-            const json = await res.json();
+            if (gender === 'female') {
+                // Female flow: Empty schedule + sequential modals for mandatory courses
+                displayCourses([]);
 
-            if (json.status === 'success' && json.data.length) {
-                const req = termSubjects[currentMajor][currentTerm];
-                const filtered = json.data.filter(c => req.includes(formatCourseCode(c.subject, c.courseCode)));
-                displayCourses(filtered);
+                const mandatory = termSubjectsFemale[currentMajor]?.[currentTerm] || [];
+                if (mandatory.length > 0) {
+                    await showSequentialModals(mandatory);
+                }
+
                 updateSuggestedCourses();
             } else {
-                alert('No schedule found for this block.');
+                // Male flow: Fetch block schedule from API
+                const url = `https://api.kauindex.com/search?termCode=202602&section=${block}&gender=${gender}&level=بكالوريوس&limit=100`;
+                const res = await fetch(url);
+                const json = await res.json();
+
+                if (json.status === 'success' && json.data.length) {
+                    const req = termSubjects[currentMajor][currentTerm];
+                    const filtered = json.data.filter(c => req.includes(formatCourseCode(c.subject, c.courseCode)));
+                    displayCourses(filtered);
+                    updateSuggestedCourses();
+                } else {
+                    // No courses found - show empty schedule with suggestions
+                    displayCourses([]);
+                    updateSuggestedCourses();
+                }
             }
         } catch (err) {
-            alert('Error loading schedule.');
+            await showConfirmModal('Connection Error', 'Could not load schedule. Please try again later.');
+            return;
         } finally {
             btn.textContent = 'Load Block Schedule';
             btn.disabled = false;
@@ -807,9 +1079,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('scheduleControls').classList.add('hidden');
             document.querySelector('section').style.display = 'none';
             document.querySelector('main').style.display = 'block';
-            document.getElementById('blockForm').reset();
-            currentMajor = null;
-            currentTerm = null;
+            // Keep form values - don't reset
         }
     });
 });

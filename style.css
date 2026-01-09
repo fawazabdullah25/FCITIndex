@@ -42,6 +42,11 @@
     --course-box-border: #0088cc;
     --section-header-bg: #e0f4ff;
 
+    --success: #008844;
+    --success-bg: #d4f5e0;
+    --warning: #cc8800;
+    --danger: #cc3355;
+
     --select-arrow: url('data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%231a1a2e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
 }
 
@@ -108,8 +113,8 @@ body {
 
 .theme-toggle {
     position: absolute;
-    top: 0;
-    right: 0;
+    top: 25px;
+    right: 25px;
     background: var(--bg-card);
     border: 2px solid var(--border-color);
     border-radius: 50%;
@@ -473,9 +478,9 @@ section {
     color: var(--success) !important;
     font-style: normal;
     padding: 10px 20px;
-    background: rgba(0, 255, 136, 0.1);
+    background: var(--success-bg, rgba(0, 255, 136, 0.15));
     border-radius: 8px;
-    border: 1px solid rgba(0, 255, 136, 0.3);
+    border: 1px solid var(--success);
 }
 
 .search-container {
@@ -528,12 +533,13 @@ section {
     transition: all 0.3s ease;
     width: auto;
     flex-shrink: 0;
-    /* Prevent shrinking on mobile */
+    border-radius: 0 50px 50px 0;
+    /* Straight left corners, rounded right to match pill */
 }
 
 #fetchBtn:hover {
     transform: none;
-    box-shadow: 0 0 15px var(--accent-glow);
+    box-shadow: 0 0 15px var(--accent-glow), 0 0 20px rgba(0, 136, 204, 0.3);
 }
 
 .search-icon {
@@ -623,6 +629,52 @@ section {
     color: var(--accent-primary);
 }
 
+.modal-header-buttons {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Mobile filter toggle - hidden on desktop */
+.mobile-filter-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.2s;
+}
+
+.mobile-filter-toggle:hover {
+    border-color: var(--accent-primary);
+}
+
+.filter-toggle-icon {
+    width: 18px;
+    height: 18px;
+}
+
+/* Mobile: show filter toggle and collapse filters */
+@media (max-width: 767px) {
+    .mobile-filter-toggle {
+        display: flex;
+    }
+
+    .filters-panel {
+        display: none;
+        padding: 15px;
+    }
+
+    .filters-panel.expanded {
+        display: block;
+    }
+}
+
 .modal-close-btn {
     background: rgba(255, 68, 102, 0.1);
     color: var(--danger);
@@ -685,10 +737,12 @@ section {
 .day-chip {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     background: var(--bg-input);
     border: 1px solid var(--border-color);
-    padding: 6px 12px;
+    padding: 6px 0;
+    min-width: 50px;
     border-radius: 20px;
     cursor: pointer;
     font-size: 12px;
@@ -847,7 +901,7 @@ section {
     opacity: 0.7;
 }
 
-/* NO TRANSITION for modal buttons */
+/* Modal section buttons - glow but no transform */
 .add-section-btn {
     width: 100%;
     margin: 0;
@@ -859,13 +913,14 @@ section {
     color: var(--accent-primary);
     font-weight: 600;
     cursor: pointer;
-    transition: none;
-    /* Removed to fix gap glitch */
+    transition: background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .add-section-btn:hover {
     background: var(--accent-primary);
     color: var(--bg-primary);
+    transform: none;
+    box-shadow: 0 0 15px var(--accent-glow);
 }
 
 .details-modal {
@@ -923,7 +978,7 @@ section {
     left: 50%;
     transform: translateX(-50%);
     background: var(--bg-card);
-    border: 1px solid var(--accent-primary);
+    border: 1px solid var(--text-primary);
     box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
     padding: 12px 25px;
     border-radius: 50px;
@@ -1064,6 +1119,17 @@ section {
     padding: 10px 0;
 }
 
+.empty-schedule-msg {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 40px 20px;
+    font-size: 14px;
+    background: var(--bg-card);
+    border: 1px dashed var(--border-color);
+    border-radius: 12px;
+    margin: 10px 0;
+}
+
 .mobile-day-group {
     margin-bottom: 20px;
     border: 1px solid var(--border-color);
@@ -1119,25 +1185,40 @@ section {
 }
 
 .section-badge,
-.crn-badge {
-    background: var(--accent-primary);
-    color: var(--bg-primary);
-    padding: 2px 8px;
-    border-radius: 12px;
+.crn-badge,
+.credits-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 4px;
     font-size: 11px;
     font-weight: 600;
 }
 
+.section-badge {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+}
+
 .crn-badge {
     background: var(--accent-secondary);
+    color: var(--bg-primary);
+}
+
+.credits-badge {
+    background: var(--bg-card);
+    border: 1px solid var(--accent-secondary);
+    color: var(--accent-secondary);
 }
 
 .remove-mobile-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     padding: 0;
     background: var(--danger);
     color: white;

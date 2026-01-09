@@ -16,7 +16,7 @@
         </div>
 
         <button id="themeToggle" class="theme-toggle" title="Toggle Light/Dark Mode">
-            <img src="icons/theme.png" alt="" class="theme-icon">
+            <img src="icons/moon.png" alt="" class="theme-icon">
         </button>
     </header>
 
@@ -39,8 +39,13 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h3 id="modalTitle">Choose a section for <span></span></h3>
-                    <button onclick="document.getElementById('modal').style.display='none'" class="modal-close-btn"
-                        title="Close">×</button>
+                    <div class="modal-header-buttons">
+                        <button id="mobileFilterToggle" class="mobile-filter-toggle" title="Toggle Filters">
+                            <img src="icons/filter.png" alt="" class="filter-toggle-icon">
+                        </button>
+                        <button onclick="document.getElementById('modal').style.display='none'" class="modal-close-btn"
+                            title="Close">×</button>
+                    </div>
                 </div>
 
                 <div class="modal-body-wrapper">
