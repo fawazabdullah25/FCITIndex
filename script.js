@@ -218,6 +218,62 @@ function restoreFormState() {
 }
 
 // ==========================================
+// SCHEDULE PERSISTENCE
+// ==========================================
+
+function saveScheduleState() {
+    const crns = [];
+    document.querySelectorAll('.course-box').forEach(box => {
+        if (box.courseData && !crns.includes(box.courseData.crn)) {
+            crns.push(box.courseData.crn);
+        }
+    });
+
+    const isOnSchedule = document.querySelector('section').style.display === 'block';
+
+    const state = {
+        crns: crns,
+        isOnSchedule: isOnSchedule
+    };
+    localStorage.setItem('scheduleState', JSON.stringify(state));
+}
+
+async function restoreScheduleState() {
+    const saved = localStorage.getItem('scheduleState');
+    if (!saved) return;
+
+    try {
+        const state = JSON.parse(saved);
+
+        if (!state.isOnSchedule || state.crns.length === 0) return;
+
+        const gender = document.getElementById('gender').value;
+
+        // Show schedule view
+        displayCourses([]);
+
+        // Fetch each course by CRN and add to grid
+        for (const crn of state.crns) {
+            try {
+                const url = `https://api.kauindex.com/search?termCode=202602&crn=${crn}&gender=${gender}&limit=1`;
+                const res = await fetch(url);
+                const json = await res.json();
+
+                if (json.status === 'success' && json.data.length > 0) {
+                    addCourseToGrid(json.data[0]);
+                }
+            } catch (err) {
+                console.warn(`Could not restore course CRN ${crn}`);
+            }
+        }
+
+        updateSuggestedCourses();
+    } catch (e) {
+        console.warn('Could not restore schedule state');
+    }
+}
+
+// ==========================================
 // UTILITY FUNCTIONS
 // ==========================================
 
@@ -325,6 +381,7 @@ function removeCourse(courseCode) {
 
     updateSuggestedCourses();
     showToast(`Removed ${courseCode}`);
+    saveScheduleState();
 }
 
 async function restoreLastCourse() {
@@ -839,6 +896,22 @@ function applyFilters() {
 
         card.style.display = show ? 'block' : 'none';
     });
+
+    // Show message if all sections are filtered out
+    const list = document.getElementById('sectionList');
+    const visibleCards = list.querySelectorAll('.section-card[style*="display: block"], .section-card:not([style*="display"])');
+    const actuallyVisible = [...list.querySelectorAll('.section-card')].filter(c => c.style.display !== 'none');
+
+    // Remove existing filter message if any
+    const existingMsg = list.querySelector('.no-results-msg.filter-msg');
+    if (existingMsg) existingMsg.remove();
+
+    if (actuallyVisible.length === 0 && list.querySelectorAll('.section-card').length > 0) {
+        const msg = document.createElement('p');
+        msg.className = 'no-results-msg filter-msg';
+        msg.textContent = 'No sections match your filters.';
+        list.appendChild(msg);
+    }
 }
 
 // ==========================================
@@ -900,6 +973,7 @@ function addCourseToGrid(course) {
     const current = getAllCoursesFromGrid();
     current.push(course);
     displayCourses(current);
+    saveScheduleState();
 }
 
 // ==========================================
@@ -909,6 +983,11 @@ function addCourseToGrid(course) {
 document.addEventListener('DOMContentLoaded', () => {
     populateTimeFilter();
     restoreFormState();
+
+    // Restore schedule after form state is fully restored
+    setTimeout(() => {
+        restoreScheduleState();
+    }, 300);
 
     const themeToggle = document.getElementById('themeToggle');
     const themeIcon = themeToggle?.querySelector('.theme-icon');
@@ -1080,6 +1159,47 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelector('section').style.display = 'none';
             document.querySelector('main').style.display = 'block';
             // Keep form values - don't reset
+            saveScheduleState(); // Clear saved schedule
+        }
+    });
+
+    // Logo click - same as Reset Schedule
+    document.getElementById('logoBtn')?.addEventListener('click', async () => {
+        const confirmed = await showConfirmModal('Reset Schedule', 'Clear entire schedule?');
+
+        if (confirmed) {
+            document.getElementById('timetableContainer').innerHTML = '';
+            document.getElementById('scheduleControls').classList.add('hidden');
+            document.querySelector('section').style.display = 'none';
+            document.querySelector('main').style.display = 'block';
+            saveScheduleState(); // Clear saved schedule
+        }
+    });
+
+    // ESC key closes modals
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            document.getElementById('modal').style.display = 'none';
+            document.getElementById('detailsModal').style.display = 'none';
+            document.getElementById('confirmModal').style.display = 'none';
+        }
+    });
+
+    // Click outside modal content closes modal
+    document.getElementById('modal')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) {
+            e.currentTarget.style.display = 'none';
+        }
+    });
+    document.getElementById('detailsModal')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) {
+            e.currentTarget.style.display = 'none';
+        }
+    });
+    document.getElementById('confirmModal')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) {
+            // For confirm modal, treat click-outside as cancel
+            document.getElementById('confirmNo')?.click();
         }
     });
 });

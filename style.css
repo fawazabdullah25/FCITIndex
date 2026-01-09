@@ -94,6 +94,16 @@ body {
     flex-direction: column;
     align-items: center;
     margin-bottom: 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+.logo-section:hover {
+    transform: none;
+    box-shadow: none;
+    background: none;
 }
 
 .logo {
@@ -113,8 +123,8 @@ body {
 
 .theme-toggle {
     position: absolute;
-    top: 25px;
-    right: 25px;
+    top: 10px;
+    right: 10px;
     background: var(--bg-card);
     border: 2px solid var(--border-color);
     border-radius: 50%;
@@ -606,6 +616,26 @@ section {
         overflow-y: auto;
         flex-shrink: 0;
     }
+
+    /* On desktop, filter-row-pair children stack vertically */
+    .filter-row-pair {
+        display: block;
+    }
+
+    .filter-row-pair .filter-row {
+        margin-bottom: 12px;
+    }
+
+    /* Consistent spacing for all filter rows on desktop */
+    .filters-panel>.filter-row,
+    .filters-panel>.filter-row-pair {
+        margin-bottom: 12px;
+    }
+
+    .filters-panel>.filter-row:last-child,
+    .filters-panel>.filter-row-pair:last-child {
+        margin-bottom: 0;
+    }
 }
 
 .modal-scroll-container {
@@ -665,20 +695,90 @@ section {
         display: flex;
     }
 
+    .modal-body-wrapper {
+        position: relative;
+    }
+
+    .modal-scroll-container {
+        min-height: 200px;
+    }
+
     .filters-panel {
-        display: none;
-        padding: 15px;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: var(--bg-card);
+        border-bottom: 2px solid var(--accent-primary);
+        padding: 12px 15px;
+        z-index: 30;
+        transform: translateY(-100%);
+        opacity: 0;
+        transition: transform 0.3s ease, opacity 0.3s ease;
+        pointer-events: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
     .filters-panel.expanded {
-        display: block;
+        transform: translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    /* Two inputs per row layout */
+    .filter-row-pair {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .filter-row-pair .filter-row {
+        flex: 1;
+        margin-bottom: 0;
+    }
+
+    .filters-panel>.filter-row {
+        margin-bottom: 8px;
+    }
+
+    .filters-panel input[type="text"],
+    .filters-panel select {
+        font-size: 12px;
+        padding: 8px 10px;
+        width: 100%;
+    }
+
+    .filters-panel input[type="text"]::placeholder {
+        font-size: 11px;
+    }
+
+    .filters-panel .day-checkboxes {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 6px;
+        width: 100%;
+    }
+
+    /* On mobile, flatten day-rows so all 5 days are in one flow */
+    .filters-panel .day-row {
+        display: contents;
+    }
+
+    .filters-panel .day-chip {
+        font-size: 11px;
+        padding: 5px 8px;
+        min-width: 40px;
+    }
+
+    .filters-panel .conflict-toggle {
+        font-size: 11px;
     }
 }
 
 .modal-close-btn {
-    background: rgba(255, 68, 102, 0.1);
-    color: var(--danger);
-    border: 1px solid var(--danger);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 50%;
     width: 32px;
     height: 32px;
@@ -693,8 +793,9 @@ section {
 }
 
 .modal-close-btn:hover {
-    background: var(--danger);
-    color: white;
+    background: var(--text-muted);
+    color: var(--bg-primary);
+    border-color: var(--text-muted);
 }
 
 .filter-row {
@@ -705,6 +806,16 @@ section {
 
 .filter-row:last-child {
     margin-bottom: 0;
+}
+
+.day-checkboxes {
+    flex-direction: column;
+    gap: 6px;
+}
+
+.day-row {
+    display: flex;
+    gap: 6px;
 }
 
 .filters-panel input[type="text"],
@@ -721,6 +832,17 @@ section {
     display: flex;
     align-items: center;
     width: 100%;
+}
+
+.custom-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2300d4ff' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 20px;
+    padding-right: 35px;
+    cursor: pointer;
 }
 
 .filters-panel input:focus,
@@ -1111,6 +1233,7 @@ section {
 
     #courseInput {
         padding: 12px 15px;
+        font-size: 11px;
     }
 }
 
@@ -1128,6 +1251,14 @@ section {
     border: 1px dashed var(--border-color);
     border-radius: 12px;
     margin: 10px 0;
+}
+
+.no-results-msg {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 40px 20px;
+    font-size: 14px;
+    margin: 20px 0;
 }
 
 .mobile-day-group {
@@ -1190,7 +1321,7 @@ section {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 22px;
+    height: 24px;
     padding: 0 8px;
     border-radius: 4px;
     font-size: 11px;
@@ -1217,8 +1348,8 @@ section {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     padding: 0;
     background: var(--danger);
     color: white;

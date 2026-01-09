@@ -10,10 +10,10 @@
 
 <body>
     <header class="site-header">
-        <div class="logo-section">
+        <button id="logoBtn" class="logo-section">
             <span class="logo">FCITIndex</span>
             <span class="logo-tagline">Build Your FCIT Schedule</span>
-        </div>
+        </button>
 
         <button id="themeToggle" class="theme-toggle" title="Toggle Light/Dark Mode">
             <img src="icons/moon.png" alt="" class="theme-icon">
@@ -50,26 +50,34 @@
 
                 <div class="modal-body-wrapper">
                     <div id="filtersPanel" class="filters-panel">
-                        <div class="filter-row">
-                            <input type="text" id="filterInstructor" placeholder="Instructor name...">
+                        <div class="filter-row-pair">
+                            <div class="filter-row">
+                                <input type="text" id="filterInstructor" placeholder="Instructor...">
+                            </div>
+                            <div class="filter-row">
+                                <input type="text" id="filterSection" placeholder="Section">
+                            </div>
                         </div>
-                        <div class="filter-row">
-                            <input type="text" id="filterSection" placeholder="Section (e.g., AB)">
-                        </div>
-                        <div class="filter-row">
-                            <input type="text" id="filterCrn" placeholder="CRN">
-                        </div>
-                        <div class="filter-row">
-                            <select id="filterStartTime" class="custom-select">
-                                <option value="">Any Start Time</option>
-                            </select>
+                        <div class="filter-row-pair">
+                            <div class="filter-row">
+                                <input type="text" id="filterCrn" placeholder="CRN">
+                            </div>
+                            <div class="filter-row">
+                                <select id="filterStartTime" class="custom-select">
+                                    <option value="">Start Time</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="filter-row day-checkboxes">
-                            <label class="day-chip"><input type="checkbox" name="filterDay" value="U"> Sun</label>
-                            <label class="day-chip"><input type="checkbox" name="filterDay" value="M"> Mon</label>
-                            <label class="day-chip"><input type="checkbox" name="filterDay" value="T"> Tue</label>
-                            <label class="day-chip"><input type="checkbox" name="filterDay" value="W"> Wed</label>
-                            <label class="day-chip"><input type="checkbox" name="filterDay" value="R"> Thu</label>
+                            <div class="day-row">
+                                <label class="day-chip"><input type="checkbox" name="filterDay" value="U"> Sun</label>
+                                <label class="day-chip"><input type="checkbox" name="filterDay" value="T"> Tue</label>
+                                <label class="day-chip"><input type="checkbox" name="filterDay" value="R"> Thu</label>
+                            </div>
+                            <div class="day-row">
+                                <label class="day-chip"><input type="checkbox" name="filterDay" value="M"> Mon</label>
+                                <label class="day-chip"><input type="checkbox" name="filterDay" value="W"> Wed</label>
+                            </div>
                         </div>
                         <div class="filter-row">
                             <label class="conflict-toggle">
