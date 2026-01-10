@@ -308,6 +308,22 @@ function formatDays(days) {
         .map(d => dayNames[d] || d).join(', ');
 }
 
+// Modal management helper to handle scroll locking
+function closeModal(id) {
+    document.getElementById(id).style.display = 'none';
+
+    // Only unlock scroll if NO other modals are open
+    const modals = ['modal', 'detailsModal', 'confirmModal'];
+    const anyOpen = modals.some(mId => {
+        const el = document.getElementById(mId);
+        return el && el.style.display === 'flex';
+    });
+
+    if (!anyOpen) {
+        document.body.classList.remove('modal-open');
+    }
+}
+
 // Show Confirmation Modal (Async)
 function showConfirmModal(title, message) {
     return new Promise((resolve) => {
@@ -319,10 +335,12 @@ function showConfirmModal(title, message) {
 
         titleEl.textContent = title;
         messageEl.textContent = message;
+
         modal.style.display = 'flex';
+        document.body.classList.add('modal-open');
 
         const cleanup = () => {
-            modal.style.display = 'none';
+            closeModal('confirmModal');
             yesBtn.onclick = null;
             noBtn.onclick = null;
         };
@@ -455,7 +473,9 @@ async function handleCourseAddition(course, isUndo = false) {
     if (!conflict) {
         addCourseToGrid(course);
         // Only hide modal if not from Undo action
-        if (!isUndo) document.getElementById('modal').style.display = 'none';
+        if (!isUndo) {
+            closeModal('modal');
+        }
         updateSuggestedCourses();
         return;
     }
@@ -548,11 +568,12 @@ function showCourseDetails(course) {
 
     removeBtn.onclick = () => {
         removeCourse(codeStr);
-        modal.style.display = 'none';
+        closeModal('detailsModal');
     };
 
-    document.getElementById('closeDetailsBtn').onclick = () => modal.style.display = 'none';
+    document.getElementById('closeDetailsBtn').onclick = () => closeModal('detailsModal');
     modal.style.display = 'flex';
+    document.body.classList.add('modal-open');
 }
 
 function displayCourses(courses) {
@@ -628,6 +649,9 @@ function displayCourses(courses) {
     document.getElementById('scheduleControls').classList.remove('hidden');
     document.querySelector('section').style.display = 'block';
     document.querySelector('main').style.display = 'none';
+
+    // Save schedule state whenever courses are displayed
+    saveScheduleState();
 }
 
 function generateMobileScheduleList(courses, container) {
@@ -758,7 +782,7 @@ function showSectionChoicesAsync(code) {
         // Also listen for click on close button and add-section buttons
         const closeHandler = () => {
             observer.disconnect();
-            modal.style.display = 'none';
+            closeModal('modal');
             resolve();
         };
 
@@ -779,7 +803,9 @@ async function showSectionChoices(code) {
 
     titleSpan.textContent = code;
     list.innerHTML = '<p class="loading-msg">Loading sections...</p>';
+
     modal.style.display = 'flex';
+    document.body.classList.add('modal-open');
 
     document.getElementById('filterInstructor').value = '';
     document.getElementById('filterSection').value = '';
@@ -885,13 +911,12 @@ function applyFilters() {
         if (start && card.dataset.startTime !== start) show = false;
         if (hideConf && card.classList.contains('has-conflict')) show = false;
 
-        // Exact Day Match Logic
+        // Day Match Logic (Any/Intersection)
         if (selectedDays.length > 0) {
-            const courseDays = card.dataset.days.split('');
-            // Check 1: Length must be equal
-            // Check 2: All selected days must be in course days (and vice versa by length check)
-            const exactMatch = (courseDays.length === selectedDays.length) && selectedDays.every(d => courseDays.includes(d));
-            if (!exactMatch) show = false;
+            const courseDays = [...new Set(card.dataset.days.split(''))];
+            // Check: At least one selected day is in the course days
+            const hasAnyDay = selectedDays.some(d => courseDays.includes(d));
+            if (!hasAnyDay) show = false;
         }
 
         card.style.display = show ? 'block' : 'none';
@@ -899,7 +924,6 @@ function applyFilters() {
 
     // Show message if all sections are filtered out
     const list = document.getElementById('sectionList');
-    const visibleCards = list.querySelectorAll('.section-card[style*="display: block"], .section-card:not([style*="display"])');
     const actuallyVisible = [...list.querySelectorAll('.section-card')].filter(c => c.style.display !== 'none');
 
     // Remove existing filter message if any
@@ -1179,21 +1203,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // ESC key closes modals
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            document.getElementById('modal').style.display = 'none';
-            document.getElementById('detailsModal').style.display = 'none';
-            document.getElementById('confirmModal').style.display = 'none';
+            closeModal('modal');
+            closeModal('detailsModal');
+            closeModal('confirmModal');
         }
     });
 
     // Click outside modal content closes modal
     document.getElementById('modal')?.addEventListener('click', (e) => {
         if (e.target === e.currentTarget) {
-            e.currentTarget.style.display = 'none';
+            closeModal('modal');
         }
     });
     document.getElementById('detailsModal')?.addEventListener('click', (e) => {
         if (e.target === e.currentTarget) {
-            e.currentTarget.style.display = 'none';
+            closeModal('detailsModal');
         }
     });
     document.getElementById('confirmModal')?.addEventListener('click', (e) => {

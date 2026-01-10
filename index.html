@@ -10,10 +10,10 @@
 
 <body>
     <header class="site-header">
-        <button id="logoBtn" class="logo-section">
+        <div class="logo-section">
             <span class="logo">FCITIndex</span>
             <span class="logo-tagline">Build Your FCIT Schedule</span>
-        </button>
+        </div>
 
         <button id="themeToggle" class="theme-toggle" title="Toggle Light/Dark Mode">
             <img src="icons/moon.png" alt="" class="theme-icon">
@@ -43,8 +43,7 @@
                         <button id="mobileFilterToggle" class="mobile-filter-toggle" title="Toggle Filters">
                             <img src="icons/filter.png" alt="" class="filter-toggle-icon">
                         </button>
-                        <button onclick="document.getElementById('modal').style.display='none'" class="modal-close-btn"
-                            title="Close">×</button>
+                        <button onclick="closeModal('modal')" class="modal-close-btn" title="Close">×</button>
                     </div>
                 </div>
 
@@ -52,31 +51,39 @@
                     <div id="filtersPanel" class="filters-panel">
                         <div class="filter-row-pair">
                             <div class="filter-row">
-                                <input type="text" id="filterInstructor" placeholder="Instructor...">
+                                <label for="filterInstructor" class="filter-label">Instructor</label>
+                                <input type="text" id="filterInstructor" placeholder="e.g. Ahmed">
                             </div>
                             <div class="filter-row">
-                                <input type="text" id="filterSection" placeholder="Section">
+                                <label for="filterSection" class="filter-label">Section</label>
+                                <input type="text" id="filterSection" placeholder="e.g. AB">
                             </div>
                         </div>
                         <div class="filter-row-pair">
                             <div class="filter-row">
-                                <input type="text" id="filterCrn" placeholder="CRN">
+                                <label for="filterCrn" class="filter-label">CRN</label>
+                                <input type="text" id="filterCrn" placeholder="e.g. 10881">
                             </div>
                             <div class="filter-row">
+                                <label for="filterStartTime" class="filter-label">Start Time</label>
                                 <select id="filterStartTime" class="custom-select">
-                                    <option value="">Start Time</option>
+                                    <option value="">Any Time</option>
                                 </select>
                             </div>
                         </div>
                         <div class="filter-row day-checkboxes">
-                            <div class="day-row">
-                                <label class="day-chip"><input type="checkbox" name="filterDay" value="U"> Sun</label>
-                                <label class="day-chip"><input type="checkbox" name="filterDay" value="T"> Tue</label>
-                                <label class="day-chip"><input type="checkbox" name="filterDay" value="R"> Thu</label>
-                            </div>
-                            <div class="day-row">
-                                <label class="day-chip"><input type="checkbox" name="filterDay" value="M"> Mon</label>
-                                <label class="day-chip"><input type="checkbox" name="filterDay" value="W"> Wed</label>
+                            <label class="filter-label" style="width:100%">Days</label>
+                            <div class="days-container">
+                                <label class="day-chip" data-day="U"><input type="checkbox" name="filterDay" value="U">
+                                    Sun</label>
+                                <label class="day-chip" data-day="M"><input type="checkbox" name="filterDay" value="M">
+                                    Mon</label>
+                                <label class="day-chip" data-day="T"><input type="checkbox" name="filterDay" value="T">
+                                    Tue</label>
+                                <label class="day-chip" data-day="W"><input type="checkbox" name="filterDay" value="W">
+                                    Wed</label>
+                                <label class="day-chip" data-day="R"><input type="checkbox" name="filterDay" value="R">
+                                    Thu</label>
                             </div>
                         </div>
                         <div class="filter-row">
@@ -113,8 +120,8 @@
                 <h3 id="confirmTitle">Confirm Action</h3>
                 <p id="confirmMessage"></p>
                 <div class="confirm-buttons">
-                    <button id="confirmYes" class="confirm-yes-btn">Yes</button>
                     <button id="confirmNo" class="confirm-no-btn">Cancel</button>
+                    <button id="confirmYes" class="confirm-yes-btn">Yes</button>
                 </div>
             </div>
         </div>
