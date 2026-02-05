@@ -3,25 +3,29 @@
    ========================================== */
 
 :root {
+    * {
+        box-sizing: border-box;
+    }
+
     --bg-primary: #0a0a14;
     --bg-secondary: #12121f;
     --bg-card: #1a1a2e;
     --bg-input: #16162a;
     --border-color: #2a2a4a;
-    --accent-primary: #00d4ff;
-    --accent-secondary: #00a8cc;
-    --accent-glow: rgba(0, 212, 255, 0.3);
-    --danger-glow: rgba(255, 116, 142, 0.3);
+    --accent-primary: #2aa5e3;
+    --accent-secondary: #1b7dad;
+    --accent-glow: rgba(0, 136, 204, 0.5);
+    --danger-glow: rgba(136, 19, 40, 0.5);
     --text-primary: #ffffff;
     --text-secondary: #a0a0b8;
     --text-muted: #6a6a8a;
-    --success: #00ff88;
+    --success: #008844;
     --success-bg: rgba(0, 255, 136, 0.15);
-    --warning: #ffaa00;
-    --danger: #ff4466;
+    --warning: #cc8800;
+    --danger: #ad2543;
     --grid-line: rgba(0, 212, 255, 0.08);
     --course-box-bg: linear-gradient(135deg, #1e3a5f 0%, #16213e 100%);
-    --course-box-border: var(--accent-primary);
+    --course-box-border: #286cba;
     --section-header-bg: #1a1a2e;
 
     --select-arrow: url('data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
@@ -33,10 +37,10 @@
     --bg-card: #ffffff;
     --bg-input: #ffffff;
     --border-color: #d0d8e0;
-    --accent-primary: #0088cc;
-    --accent-secondary: #006699;
-    --accent-glow: rgba(0, 136, 204, 0.5);
-    --danger-glow: rgba(136, 19, 40, 0.5);
+    --accent-primary: #1da8d3;
+    --accent-secondary: #0e6b80;
+    --accent-glow: rgba(0, 212, 255, 0.3);
+    --danger-glow: rgba(255, 116, 142, 0.3);
     --text-primary: #1a1a2e;
     --text-secondary: #4a4a6a;
     --text-muted: #8a8aa8;
@@ -45,10 +49,10 @@
     --course-box-border: #0088cc;
     --section-header-bg: #e0f4ff;
 
-    --success: #008844;
+    --success: #00ff88;
     --success-bg: #d4f5e0;
-    --warning: #cc8800;
-    --danger: #cc3355;
+    --warning: #ffaa00;
+    --danger: #ff4466;
 
     --select-arrow: url('data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%231a1a2e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
 }
@@ -75,6 +79,8 @@ body {
     font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
     margin: 0;
     padding: 40px;
+    width: 100%;
+    box-sizing: border-box;
     background-color: var(--bg-primary);
     background-image: linear-gradient(var(--grid-line) 1px, transparent 1px),
         linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
@@ -110,7 +116,7 @@ body {
 }
 
 .logo {
-    color: var(--accent-primary);
+    color: #00d4ff;
     font-size: 2.5rem;
     font-weight: 700;
     letter-spacing: 2px;
@@ -124,10 +130,11 @@ body {
     font-weight: 500;
 }
 
-.theme-toggle {
+.theme-toggle,
+.settings-toggle {
     position: absolute;
-    top: 25px;
-    right: 25px;
+    top: 10px;
+    right: 60px;
     background: var(--bg-card);
     border: 2px solid var(--border-color);
     border-radius: 50%;
@@ -141,12 +148,18 @@ body {
     padding: 0;
 }
 
-.theme-toggle:hover {
+.settings-toggle {
+    right: 10px;
+}
+
+.theme-toggle:hover,
+.settings-toggle:hover {
     border-color: var(--accent-primary);
     transform: scale(1.1);
 }
 
-.theme-icon {
+.theme-icon,
+.settings-icon {
     width: 18px;
     height: 18px;
     object-fit: contain;
@@ -160,7 +173,8 @@ h3 {
 
 main {
     max-width: 900px;
-    margin: 30px auto;
+    width: 100%;
+    margin: 0 auto;
     padding: 30px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -276,6 +290,28 @@ section {
     display: none !important;
 }
 
+/* Schedule Controls */
+#scheduleControls {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin: 20px 0;
+    padding: 0;
+}
+
+#scheduleControls button {
+    flex: 1;
+    min-width: 0;
+    /* Allow shrinking if needed */
+    white-space: nowrap;
+}
+
+#scheduleControls.hidden {
+    display: none;
+}
+
 /* Grid */
 .schedule-title {
     color: var(--accent-primary);
@@ -308,8 +344,17 @@ section {
 }
 
 .time-header {
-    flex: 0 0 50px;
+    flex: 0 0 70px;
     border-right: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.header-icon {
+    width: 18px;
+    height: 18px;
+    opacity: 0.8;
 }
 
 .grid-body {
@@ -329,7 +374,7 @@ section {
 
 .time-label {
     position: absolute;
-    right: 10px;
+    right: 7px;
     transform: translateY(-50%);
     font-size: 11px;
     color: var(--text-secondary);
@@ -405,14 +450,14 @@ section {
 .course-code {
     font-weight: 700;
     color: var(--accent-primary);
-    font-size: 12px;
+    font-size: 14px;
 }
 
 .course-detail-inline {
     display: flex;
     align-items: center;
-    font-size: 10px;
-    color: var(--text-primary);
+    font-size: 9px;
+    color: var(--text-secondary);
     white-space: normal;
     line-height: 1.2;
 }
@@ -432,17 +477,27 @@ section {
 #scheduleControls {
     display: flex;
     justify-content: center;
+    align-items: stretch;
+    gap: 10px;
     margin: 20px 0;
+    flex-wrap: wrap;
 }
 
 #clearScheduleBtn {
-    padding: 12px 30px;
+    padding: 12px 20px;
     background: transparent;
     border: 2px solid var(--danger);
     color: var(--danger);
     border-radius: 8px;
     font-size: 14px;
-    width: auto;
+    font-weight: 600;
+    flex: 1;
+    min-width: 140px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
 }
 
 #clearScheduleBtn:hover {
@@ -498,7 +553,7 @@ section {
 }
 
 .search-container {
-    margin-top: 30px;
+    margin: 30px 0;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -798,10 +853,22 @@ section {
     transition: all 0.3s ease;
 }
 
+.modal-close-btn img {
+    width: 20px;
+    height: 20px;
+    filter: brightness(1);
+    /* Default visible */
+    transition: filter 0.3s ease;
+}
+
 .modal-close-btn:hover {
-    background: var(--text-muted);
-    color: var(--bg-primary);
-    border-color: var(--text-muted);
+    border-color: var(--accent-primary);
+    transform: scale(1.1);
+}
+
+.modal-close-btn:hover img {
+    filter: brightness(100);
+    /* White on hover */
 }
 
 .filter-row {
@@ -1041,6 +1108,32 @@ section {
     box-shadow: 0 0 15px var(--accent-glow);
 }
 
+/* Error and loading messages in modals */
+.error-msg {
+    color: #ff6b6b;
+    text-align: center;
+    padding: 40px 20px;
+    font-size: 14px;
+    background: rgba(255, 107, 107, 0.1);
+    border-radius: 8px;
+    margin: 10px;
+    border: 1px solid rgba(255, 107, 107, 0.3);
+}
+
+.loading-msg {
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 40px 20px;
+    font-size: 14px;
+}
+
+.no-results-msg {
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 40px 20px;
+    font-size: 14px;
+}
+
 .details-modal {
     max-width: 450px;
 }
@@ -1048,6 +1141,14 @@ section {
 .details-body {
     padding: 25px;
     max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Fix for subject choice modal list height */
+#sectionList {
+    min-height: 300px;
+    /* Increased from default */
+    max-height: 60vh;
     overflow-y: auto;
 }
 
@@ -1190,25 +1291,30 @@ section {
 .confirm-buttons button {
     flex: 1;
     min-width: 100px;
+    padding: 10px 15px;
+    height: 44px;
+    /* Ensure equal height */
 }
 
 .confirm-yes-btn {
-    padding: 10px 25px;
     background: var(--danger);
     color: white;
-    width: auto;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.confirm-no-btn {
+    background: var(--accent-primary);
+    border: 1px solid var(--accent-primary);
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
 }
 
 .confirm-yes-btn:hover {
     box-shadow: 0 5px 25px var(--danger-glow);
-}
-
-.confirm-no-btn {
-    padding: 10px 25px;
-    background: var(--accent-primary);
-    border: 1px solid var(--border-color);
-    color: white;
-    width: auto;
 }
 
 /* Mobile Responsive */
@@ -1230,12 +1336,101 @@ section {
         width: 100%;
     }
 
+    /* Desktop grid stays visible but adapts for mobile */
     .timetable-grid {
+        display: block !important;
+        overflow-x: auto;
+    }
+
+    /* Shorten day headers to 2 letters on mobile */
+    .day-header {
+        font-size: 11px !important;
+    }
+
+    .day-header::after {
+        content: attr(data-shortday);
+    }
+
+    .day-header {
+        font-size: 0 !important;
+        /* Hide original text */
+    }
+
+    .day-header::after {
+        font-size: 11px;
+    }
+
+    /* Narrow time column on mobile */
+    .time-header {
+        flex: 0 0 40px !important;
+    }
+
+    .time-column {
+        flex: 0 0 40px !important;
+    }
+
+    .time-label {
+        font-size: 9px !important;
+    }
+
+    /* Grid body padding adjustment */
+    .grid-body {
+        padding: 10px 0 10px 0;
+    }
+
+    /* Course box: Hide time/section on mobile, show only code+location */
+    .course-box .course-box-header .course-section-badge {
+        display: none;
+    }
+
+    .course-box .course-detail-inline {
+        display: none !important;
+        /* Hide all details by default */
+    }
+
+    .course-box .course-detail-inline.loc {
+        display: flex !important;
+        /* Show only location */
+        font-size: 9px;
+    }
+
+    .course-box {
+        padding: 3px 4px;
+        overflow: hidden;
+    }
+
+    .course-box .course-code {
+        font-size: 12px;
+        white-space: normal;
+        word-break: break-word;
+        line-height: 1.2;
+    }
+
+    .course-box .course-detail-inline.loc {
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    /* Mobile list view is hidden by default, shown when toggled */
+    .mobile-schedule-list {
+        display: none;
+    }
+
+    /* Toggle states for views */
+    .mobile-list-active .timetable-grid {
         display: none !important;
     }
 
-    .mobile-schedule-list {
+    .mobile-list-active .mobile-schedule-list {
         display: block !important;
+    }
+
+    .mobile-grid-active .timetable-grid {
+        display: block !important;
+    }
+
+    .mobile-grid-active .mobile-schedule-list {
+        display: none !important;
     }
 
     /* Mobile Search Bar Fixes */
@@ -1251,6 +1446,26 @@ section {
     #courseInput {
         padding: 12px 15px;
         font-size: 11px;
+    }
+
+    /* Button text wrapping for small screens */
+    #scheduleControls {
+        flex-direction: column;
+    }
+
+    #scheduleControls button,
+    #scheduleControls .mobile-view-toggle {
+        white-space: normal;
+        line-height: 1.3;
+        min-height: 48px;
+    }
+
+    .detail-icon {
+        width: 0px;
+        height: 0px;
+        margin-right: 0px;
+        flex-shrink: 0;
+        object-fit: contain;
     }
 }
 
@@ -1289,9 +1504,9 @@ section {
 .mobile-day-header {
     font-size: 14px;
     font-weight: 700;
-    color: var(--bg-primary);
+    color: var(--bg-card);
     padding: 10px 15px;
-    background: var(--accent-primary);
+    background: var(--course-box-border);
 }
 
 .mobile-course-card {
@@ -1306,6 +1521,11 @@ section {
     border-bottom: none;
 }
 
+.mobile-course-code {
+    color: var(--accent-primary);
+    font-weight: 700;
+}
+
 .card-header-row {
     display: flex;
     justify-content: space-between;
@@ -1317,14 +1537,6 @@ section {
     display: flex;
     align-items: center;
     gap: 6px;
-}
-
-/* Mobile Colors/Typography */
-.mobile-course-code {
-    font-weight: 800;
-    color: var(--accent-primary);
-    /* Fixed to blue */
-    font-size: 15px;
 }
 
 .mobile-course-title {
@@ -1375,6 +1587,13 @@ section {
     font-size: 14px;
     cursor: pointer;
     line-height: 1;
+}
+
+.remove-mobile-btn img {
+    width: 18px;
+    height: 18px;
+    filter: brightness(100);
+    /* Always white since btn background is red */
 }
 
 .course-meta {
@@ -1460,4 +1679,654 @@ body.modal-open {
     display: block;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+/* ==========================================
+   MOBILE SCHEDULE GRID VIEW
+   ========================================== */
+
+/* View Toggle Button & Custom Course Button */
+.mobile-view-toggle,
+.custom-course-btn {
+    display: none;
+    padding: 12px 20px;
+    background: transparent;
+    border: 2px solid var(--accent-primary);
+    color: var(--accent-primary);
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    flex: 1;
+    min-width: 140px;
+    white-space: normal;
+    /* Allow wrapping */
+    line-height: 1.3;
+}
+
+/* Force display for Custom Course button globally since it's not just mobile */
+.custom-course-btn {
+    display: inline-flex !important;
+}
+
+.mobile-view-toggle:hover,
+.custom-course-btn:hover {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    box-shadow: 0 5px 25px var(--accent-glow);
+    transform: translateY(-2px);
+}
+
+.mobile-view-toggle img,
+.custom-course-btn img,
+.task-btn img {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    vertical-align: middle;
+    filter: none;
+}
+
+/* Removed broken icon filter logic - icons are already visible */
+
+/* Desktop - hide mobile elements */
+@media (min-width: 769px) {
+    .mobile-view-toggle {
+        display: none !important;
+    }
+
+    .mobile-schedule-grid {
+        display: none !important;
+    }
+}
+
+/* Ramadan time inline (shown next to regular time in mobile list) */
+.ramadan-time-inline {
+    margin-left: 12px;
+    color: #42c0fb;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ramadan-time-inline .meta-icon {
+    width: 12px;
+    height: 12px;
+}
+
+/* Icon filter for dark/light mode */
+.mobile-view-toggle img {
+    filter: brightness(1);
+}
+
+.mobile-view-toggle:hover img {
+    filter: brightness(0);
+}
+
+[data-theme="light"] .mobile-view-toggle img {
+    filter: brightness(1);
+    /* Dark icon in light mode */
+}
+
+[data-theme="light"] .mobile-view-toggle:hover img {
+    filter: brightness(10);
+    /* White icon on hover */
+}
+
+.custom-course-btn img {
+    filter: brightness(1);
+}
+
+.custom-course-btn:hover img {
+    filter: brightness(0);
+}
+
+[data-theme="light"] .custom-course-btn img {
+    filter: brightness(1);
+    /* Dark icon in light mode */
+}
+
+[data-theme="light"] .custom-course-btn:hover img {
+    filter: brightness(10);
+    /* White icon on hover */
+}
+
+.task-btn img {
+    filter: brightness(1);
+}
+
+.task-btn:hover img {
+    filter: brightness(0);
+}
+
+[data-theme="light"] .task-btn img {
+    filter: brightness(1);
+    /* Dark icon in light mode */
+}
+
+[data-theme="light"] .task-btn:hover img {
+    filter: brightness(10);
+    /* White icon on hover */
+}
+
+/* Show toggle button on mobile */
+@media (max-width: 768px) {
+    .mobile-view-toggle {
+        display: flex !important;
+    }
+
+    /* Toggle states for views */
+    .mobile-list-active .timetable-grid {
+        display: none !important;
+    }
+
+    .mobile-list-active .mobile-schedule-list {
+        display: block !important;
+    }
+
+    .mobile-grid-active .timetable-grid {
+        display: block !important;
+    }
+
+    .mobile-grid-active .mobile-schedule-list {
+        display: none !important;
+    }
+}
+
+/* Center course text in mobile grid */
+@media (max-width: 768px) {
+    .course-box {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+    }
+
+    .course-box .course-box-header {
+        justify-content: center;
+    }
+}
+
+/* Action Buttons Row - ADD OTHER COURSE & ADD TASK */
+.action-buttons-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.action-btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: transparent;
+    border: 2px solid var(--accent-primary);
+    color: var(--accent-primary);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.action-btn:hover {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    box-shadow: 0 5px 25px var(--accent-glow);
+    transform: translateY(-2px);
+}
+
+.action-btn .btn-icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* Header Actions Container */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+
+/* Settings Modal */
+.settings-modal {
+    max-width: 400px;
+}
+
+.setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.setting-row:last-child {
+    border-bottom: none;
+}
+
+.setting-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.setting-label {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.setting-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 28px;
+    flex-shrink: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    transition: 0.3s;
+    border-radius: 28px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 4px;
+    bottom: 3px;
+    background-color: var(--text-muted);
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.toggle-switch input:checked+.toggle-slider {
+    background-color: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+
+.toggle-switch input:checked+.toggle-slider:before {
+    transform: translateX(22px);
+    background-color: white;
+}
+
+/* Task-specific styles */
+.task-box {
+    background: linear-gradient(135deg, #3d2a5f 0%, #2a1e3e 100%) !important;
+    border-color: #7c4dff !important;
+}
+
+.task-box .course-code {
+    color: #b388ff;
+}
+
+/* Fix for Select Dropdown Arrow in Modals and Filters */
+select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: var(--select-arrow);
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 16px;
+    padding-right: 2.5rem !important;
+}
+
+/* Ensure proper modal input styling to match main form */
+.modal-content input[type="text"],
+.modal-content input[type="time"],
+.modal-content input[type="number"],
+.modal-content select,
+.modal-content textarea {
+    width: 100%;
+    padding: 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    box-sizing: border-box;
+    margin-bottom: 15px;
+    transition: all 0.2s ease;
+}
+
+.modal-content input:focus,
+.modal-content select:focus,
+.modal-content textarea:focus {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+    outline: none;
+}
+
+/* Mobile Grid Overflow Fix */
+@media (max-width: 768px) {
+    .mobile-grid-active .course-box {
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: flex-start !important;
+        padding: 4px !important;
+        overflow: hidden !important;
+    }
+
+    .mobile-grid-active .course-box-header {
+        flex-shrink: 0 !important;
+        /* Prevent header from shrinking */
+        margin-bottom: 2px !important;
+    }
+
+    .mobile-grid-active .course-detail-inline.loc {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box !important;
+        line-clamp: 3;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        white-space: normal !important;
+    }
+
+    /* Ensure code stays visible */
+    .mobile-grid-active .course-code {
+        font-weight: 800;
+        font-size: 11px;
+        z-index: 2;
+    }
+}
+
+/* HEADER LAYOUT FIX */
+.site-header {
+    margin-bottom: 30px;
+    display: flex;
+    flex-direction: row;
+    /* Row by default */
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    padding-top: 20px;
+}
+
+.header-actions {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+/* On small screens, prevent overlap */
+@media (max-width: 600px) {
+    .site-header {
+        flex-direction: column;
+        padding-top: 80px;
+        /* Space for buttons */
+    }
+
+    .header-actions {
+        top: 10px;
+        right: 10px;
+    }
+}
+
+
+/* SELECT ARROW FIX - Force specificity */
+select,
+.custom-select {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    background-image: var(--select-arrow) !important;
+    background-repeat: no-repeat !important;
+    background-position: right 1rem center !important;
+    background-size: 16px !important;
+    padding-right: 2.5rem !important;
+}
+
+/* Fix Modal Form Styles (Days Checkboxes) */
+.modal-body .day-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.modal-body .day-checkboxes label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    font-size: 0.85rem;
+}
+
+.modal-body .day-checkboxes label:has(input:checked) {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    border-color: var(--accent-primary);
+    box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+.modal-body .day-checkboxes input {
+    display: none;
+}
+
+/* MODAL FORM PANEL (Customized filters-panel) */
+.modal-form-panel {
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.modal-form-panel .filter-row-pair {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.modal-form-row {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Adjust inputs within modal form */
+.modal-form-panel input[type="text"],
+.modal-form-panel input[type="number"],
+.modal-form-panel input[type="time"],
+.modal-form-panel select,
+.modal-form-panel textarea {
+    width: 100%;
+    /* Use a reasonable height, slightly smaller than the 70px search inputs if desired, or keep match */
+    height: 50px;
+    padding: 0 15px;
+    font-size: 14px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+}
+
+.modal-form-panel input:focus,
+.modal-form-panel select:focus,
+.modal-form-panel textarea:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.modal-form-panel .filter-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    display: block;
+}
+
+/* Day checkboxes styling for modal form */
+.modal-form-panel .day-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.modal-form-panel .day-checkboxes label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    font-size: 0.85rem;
+}
+
+.modal-form-panel .day-checkboxes label:has(input:checked) {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    border-color: var(--accent-primary);
+}
+
+.modal-form-panel .day-checkboxes input {
+    display: none;
+}
+
+/* Mobile responsive adjustments for modal form */
+@media (max-width: 767px) {
+    .modal-form-panel .filter-row-pair {
+        flex-direction: row;
+        /* Keep row on small screens if possible, or col */
+    }
+
+    .modal-form-panel input,
+    .modal-form-panel select {
+        height: 45px;
+    }
+}
+
+/* Full width form panel for Add Task / Add Other Course / Settings */
+.form-panel-full {
+    width: 100% !important;
+    border-right: none !important;
+    flex: 1 !important;
+    max-width: none !important;
+    overflow-y: auto !important;
+    /* Ensure scrollable */
+}
+
+@media (max-width: 767px) {
+    .form-panel-full {
+        position: relative !important;
+        top: auto !important;
+        left: auto !important;
+        right: auto !important;
+        transform: none !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        box-shadow: none !important;
+        border-bottom: none !important;
+        background: transparent !important;
+        padding: 5px !important;
+        width: 100% !important;
+        display: block !important;
+    }
+
+    .form-panel-full .filter-row-pair {
+        display: flex;
+        flex-direction: row;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+}
+
+/* Full width form panel for Add Task / Add Other Course / Settings */
+.form-panel-full {
+    width: 100% !important;
+    border-right: none !important;
+    flex: 1 !important;
+    max-width: none !important;
+}
+
+@media (max-width: 767px) {
+    .form-panel-full {
+        position: relative !important;
+        top: auto !important;
+        left: auto !important;
+        right: auto !important;
+        transform: none !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        box-shadow: none !important;
+        background: transparent !important;
+        padding: 15px !important;
+        width: 100% !important;
+        display: block !important;
+    }
+
+    /* Ensure inputs are visible and styled correctly */
+    .form-panel-full .filter-row-pair {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    .form-panel-full input,
+    .form-panel-full select {
+        width: 100%;
+    }
 }

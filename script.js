@@ -238,6 +238,30 @@ function saveScheduleState() {
     localStorage.setItem('scheduleState', JSON.stringify(state));
 }
 
+// Custom Course Persistence
+function getCustomCourses() {
+    try {
+        return JSON.parse(localStorage.getItem('customCourses') || '[]');
+    } catch { return []; }
+}
+
+function saveCustomCourse(course) {
+    const current = getCustomCourses();
+    current.push(course);
+    localStorage.setItem('customCourses', JSON.stringify(current));
+}
+
+function removeCustomCourse(code) {
+    const current = getCustomCourses();
+    const filtered = current.filter(c => c.courseCode !== code);
+    localStorage.setItem('customCourses', JSON.stringify(filtered));
+}
+
+function getCustomCourseByCrn(crn) {
+    const current = getCustomCourses();
+    return current.find(c => c.crn === crn);
+}
+
 async function restoreScheduleState() {
     const saved = localStorage.getItem('scheduleState');
     if (!saved) return;
@@ -255,12 +279,19 @@ async function restoreScheduleState() {
         // Fetch each course by CRN and add to grid
         for (const crn of state.crns) {
             try {
-                const url = `https://api.kauindex.com/search?termCode=202602&crn=${crn}&gender=${gender}&limit=1`;
-                const res = await fetch(url);
-                const json = await res.json();
+                // Check if it's a saved custom course first (by CRN)
+                const custom = getCustomCourseByCrn(crn);
+                if (custom) {
+                    addCourseToGrid(custom);
+                } else {
+                    // Otherwise try API
+                    const url = `https://api.kauindex.com/search?termCode=202602&crn=${crn}&gender=${gender}&limit=1`;
+                    const res = await fetch(url);
+                    const json = await res.json();
 
-                if (json.status === 'success' && json.data.length > 0) {
-                    addCourseToGrid(json.data[0]);
+                    if (json.status === 'success' && json.data.length > 0) {
+                        addCourseToGrid(json.data[0]);
+                    }
                 }
             } catch (err) {
                 console.warn(`Could not restore course CRN ${crn}`);
@@ -277,7 +308,34 @@ async function restoreScheduleState() {
 // UTILITY FUNCTIONS
 // ==========================================
 
+// Fetch with timeout to prevent infinite loading when API is down
+async function fetchWithTimeout(url, options = {}, timeout = 15000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        // Create a custom error with a flag for easy identification
+        const networkError = new Error(
+            error.name === 'AbortError'
+                ? 'Request timed out after 15 seconds.'
+                : 'Network connection failed. Server may be unavailable.'
+        );
+        networkError.isNetworkError = true;
+        networkError.originalError = error;
+        throw networkError;
+    }
+}
+
 function formatCourseCode(subject, code) {
+    if (!subject || subject === '') return code;
     return `${subject}-${code}`;
 }
 
@@ -354,19 +412,259 @@ function showConfirmModal(title, message) {
 function calculateTimeRange(courses) {
     let earliestMin = 24 * 60;
     let latestMin = 0;
-    let hasCourses = false;
+    let hasItems = false;
 
     courses.forEach(course => {
         course.schedules.forEach(schedule => {
             const parsed = parseScheduleTime(schedule);
             if (!parsed) return;
-            hasCourses = true;
+            hasItems = true;
             earliestMin = Math.min(earliestMin, parsed.startMin);
             latestMin = Math.max(latestMin, parsed.endMin);
         });
     });
 
-    if (!hasCourses) return { startHour: 8, endHour: 17 };
+    if (typeof addedTasks !== 'undefined') {
+        addedTasks.forEach(task => {
+            const [h1, m1] = task.startTime.split(':').map(Number);
+            const [h2, m2] = task.endTime.split(':').map(Number);
+            const start = h1 * 60 + m1;
+            const end = h2 * 60 + m2;
+            hasItems = true;
+            earliestMin = Math.min(earliestMin, start);
+            latestMin = Math.max(latestMin, end);
+        });
+    }
+
+    if (!hasItems) return { startHour: 8, endHour: 17 };
+
+    const startHour = Math.max(7, Math.floor(earliestMin / 60) - TIME_PADDING_HOURS);
+    // Allow ending up to 02:00 AM (26 * 60)
+    const endHour = Math.min(26, Math.ceil(latestMin / 60) + TIME_PADDING_HOURS);
+
+    return { startHour, endHour };
+}
+
+// ==========================================
+// SCHEDULE PERSISTENCE
+// ==========================================
+
+function saveScheduleState() {
+    const crns = [];
+    document.querySelectorAll('.course-box').forEach(box => {
+        if (box.courseData && !crns.includes(box.courseData.crn)) {
+            crns.push(box.courseData.crn);
+        }
+    });
+
+    const isOnSchedule = document.querySelector('section').style.display === 'block';
+
+    const state = {
+        crns: crns,
+        isOnSchedule: isOnSchedule
+    };
+    localStorage.setItem('scheduleState', JSON.stringify(state));
+}
+
+// Custom Course Persistence
+function getCustomCourses() {
+    try {
+        return JSON.parse(localStorage.getItem('customCourses') || '[]');
+    } catch { return []; }
+}
+
+function saveCustomCourse(course) {
+    const current = getCustomCourses();
+    current.push(course);
+    localStorage.setItem('customCourses', JSON.stringify(current));
+}
+
+function removeCustomCourse(code) {
+    const current = getCustomCourses();
+    const filtered = current.filter(c => c.courseCode !== code);
+    localStorage.setItem('customCourses', JSON.stringify(filtered));
+}
+
+function getCustomCourseByCrn(crn) {
+    const current = getCustomCourses();
+    return current.find(c => c.crn === crn);
+}
+
+async function restoreScheduleState() {
+    const saved = localStorage.getItem('scheduleState');
+    if (!saved) return;
+
+    try {
+        const state = JSON.parse(saved);
+
+        if (!state.isOnSchedule || state.crns.length === 0) return;
+
+        const gender = document.getElementById('gender').value;
+
+        // Show schedule view
+        displayCourses([]);
+
+        // Fetch each course by CRN and add to grid
+        for (const crn of state.crns) {
+            try {
+                // Check if it's a saved custom course first (by CRN)
+                const custom = getCustomCourseByCrn(crn);
+                if (custom) {
+                    addCourseToGrid(custom);
+                } else {
+                    // Otherwise try API
+                    const url = `https://api.kauindex.com/search?termCode=202602&crn=${crn}&gender=${gender}&limit=1`;
+                    const res = await fetch(url);
+                    const json = await res.json();
+
+                    if (json.status === 'success' && json.data.length > 0) {
+                        addCourseToGrid(json.data[0]);
+                    }
+                }
+            } catch (err) {
+                console.warn(`Could not restore course CRN ${crn}`);
+            }
+        }
+
+        updateSuggestedCourses();
+    } catch (e) {
+        console.warn('Could not restore schedule state');
+    }
+}
+
+// ==========================================
+// UTILITY FUNCTIONS
+// ==========================================
+
+// Fetch with timeout to prevent infinite loading when API is down
+async function fetchWithTimeout(url, options = {}, timeout = 15000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        // Create a custom error with a flag for easy identification
+        const networkError = new Error(
+            error.name === 'AbortError'
+                ? 'Request timed out after 15 seconds.'
+                : 'Network connection failed. Server may be unavailable.'
+        );
+        networkError.isNetworkError = true;
+        networkError.originalError = error;
+        throw networkError;
+    }
+}
+
+function formatCourseCode(subject, code) {
+    if (!subject || subject === '') return code;
+    return `${subject}-${code}`;
+}
+
+function parseTime(timeStr) {
+    const [time, ampm] = timeStr.split(' ');
+    let [hour, min] = time.split(':').map(Number);
+    if (ampm === 'PM' && hour < 12) hour += 12;
+    if (ampm === 'AM' && hour === 12) hour = 0;
+    return (hour * 60) + min;
+}
+
+function parseScheduleTime(schedule) {
+    const timeMatch = schedule.time.match(/(\d{1,2}:\d{2} [AP]M) - (\d{1,2}:\d{2} [AP]M)/);
+    if (!timeMatch) return null;
+    const startMin = parseTime(timeMatch[1]);
+    const endMin = parseTime(timeMatch[2]);
+    if (isNaN(startMin) || isNaN(endMin)) return null;
+    return { ...schedule, startMin, endMin };
+}
+
+function timeRangesOverlap(start1, end1, start2, end2) {
+    return start1 < end2 && start2 < end1;
+}
+
+function formatDays(days) {
+    const dayNames = { U: 'Sun', M: 'Mon', T: 'Tue', W: 'Wed', R: 'Thu' };
+    return days.split('').sort((a, b) => (DAY_ORDER[a] ?? 99) - (DAY_ORDER[b] ?? 99))
+        .map(d => dayNames[d] || d).join(', ');
+}
+
+// Modal management helper to handle scroll locking
+function closeModal(id) {
+    document.getElementById(id).style.display = 'none';
+
+    // Only unlock scroll if NO other modals are open
+    const modals = ['modal', 'detailsModal', 'confirmModal'];
+    const anyOpen = modals.some(mId => {
+        const el = document.getElementById(mId);
+        return el && el.style.display === 'flex';
+    });
+
+    if (!anyOpen) {
+        document.body.classList.remove('modal-open');
+    }
+}
+
+// Show Confirmation Modal (Async)
+function showConfirmModal(title, message) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('confirmModal');
+        const titleEl = document.getElementById('confirmTitle');
+        const messageEl = document.getElementById('confirmMessage');
+        const yesBtn = document.getElementById('confirmYes');
+        const noBtn = document.getElementById('confirmNo');
+
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+
+        modal.style.display = 'flex';
+        document.body.classList.add('modal-open');
+
+        const cleanup = () => {
+            closeModal('confirmModal');
+            yesBtn.onclick = null;
+            noBtn.onclick = null;
+        };
+
+        yesBtn.onclick = () => { cleanup(); resolve(true); };
+        noBtn.onclick = () => { cleanup(); resolve(false); };
+    });
+}
+
+// Calculate dynamic time range - Up to 2 AM (26)
+function calculateTimeRange(courses) {
+    let earliestMin = 24 * 60;
+    let latestMin = 0;
+    let hasItems = false;
+
+    courses.forEach(course => {
+        course.schedules.forEach(schedule => {
+            const parsed = parseScheduleTime(schedule);
+            if (!parsed) return;
+            hasItems = true;
+            earliestMin = Math.min(earliestMin, parsed.startMin);
+            latestMin = Math.max(latestMin, parsed.endMin);
+        });
+    });
+
+    if (typeof addedTasks !== 'undefined') {
+        addedTasks.forEach(task => {
+            const [h1, m1] = task.startTime.split(':').map(Number);
+            const [h2, m2] = task.endTime.split(':').map(Number);
+            const start = h1 * 60 + m1;
+            const end = h2 * 60 + m2;
+            hasItems = true;
+            earliestMin = Math.min(earliestMin, start);
+            latestMin = Math.max(latestMin, end);
+        });
+    }
+
+    if (!hasItems) return { startHour: 8, endHour: 17 };
 
     const startHour = Math.max(7, Math.floor(earliestMin / 60) - TIME_PADDING_HOURS);
     // Allow ending up to 02:00 AM (26 * 60)
@@ -390,16 +688,23 @@ function removeCourse(courseCode) {
     // Remove from grid
     document.querySelectorAll(`.course-box[data-course-code="${courseCode}"]`).forEach(b => b.remove());
 
+    // Remove from custom storage if custom
+    if (courseData.isCustom) {
+        removeCustomCourse(courseCode);
+    }
+
     // Regenerate mobile list to remove empty day groups
     const container = document.getElementById('timetableContainer');
     if (container) {
         const allCourses = getAllCoursesFromGrid();
         generateMobileScheduleList(allCourses, container);
+        // generateMobileGridView(allCourses, document.querySelector('.mobile-schedule-grid'));
     }
 
     updateSuggestedCourses();
     showToast(`Removed ${courseCode}`);
     saveScheduleState();
+    refreshSchedule(); // Refresh to update display and credits
 }
 
 async function restoreLastCourse() {
@@ -542,20 +847,119 @@ function createCourseBox(course, schedule) {
     return box;
 }
 
+const RAMADAN_START_TIMES = {
+    // Morning times (left side of chart)
+    '08:00': '10:00',
+    '08:30': '10:20',
+    '09:00': '10:40',
+    '09:30': '11:00',
+    '10:00': '11:20',
+    '10:30': '11:40',
+    '11:00': '12:00',
+    '11:30': '12:50',
+    '12:00': '13:10',
+    '12:30': '13:30',
+    '13:00': '13:50',
+    '13:30': '14:10',
+    '14:00': '14:30',
+    '14:30': '14:50',
+    '15:00': '15:10',
+    '15:30': '16:10',
+    '16:00': '16:30',
+    '16:30': '21:40',
+    '17:00': '22:00',
+    '17:30': '22:20',
+    '18:00': '22:40',
+    '18:30': '23:00',
+    '19:00': '23:20',
+    '19:30': '23:40',
+    '20:00': '00:00',
+    '20:30': '00:20',
+    '21:00': '00:40',
+    '21:30': '01:00',
+    '22:00': '01:20',
+    '22:30': '01:40',
+    '23:00': '02:00',
+    '23:30': '02:20'
+};
+
+function getRamadanTime(timeStr) {
+    if (!timeStr || !timeStr.includes('-')) return null;
+    const [start, end] = timeStr.split(' - ');
+
+    // Convert 12h to 24h for lookup
+    // E.g., "8:00 AM" -> "08:00", "1:30 PM" -> "13:30"
+    const to24h = (t) => {
+        const match = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+        if (!match) return null;
+        let h = parseInt(match[1]);
+        const m = match[2];
+        const period = (match[3] || 'AM').toUpperCase();
+        if (period === 'PM' && h < 12) h += 12;
+        if (period === 'AM' && h === 12) h = 0;
+        return `${h.toString().padStart(2, '0')}:${m}`;
+    };
+
+    const startKey = to24h(start);
+    if (!startKey) return null;
+
+    const mappedStart = RAMADAN_START_TIMES[startKey];
+    if (!mappedStart) return null;
+
+    // Calculate duration
+    const startMin = parseTime(start);
+    const endMin = parseTime(end);
+    const duration = endMin - startMin;
+    const ramadanDuration = Math.round(duration * 0.7);
+
+    // Calculate new end time
+    const newStartMin = parseTime(mappedStart + (parseTime(mappedStart) < 720 && !mappedStart.includes('PM') ? ' AM' : ' PM')); // Hacky 12h guess
+    // Better: parseTime handles "10:00" as AM if no suffix? No, parseTime expects suffix.
+
+    // Simple 24h helper for Ramadan math since keys are simplistic
+    // Let's assume keys are 24h-ish or just HH:MM
+    // Actually, create a robust adder
+
+    const [h, m] = mappedStart.split(':').map(Number);
+    let startMins = h * 60 + m;
+    let endMins = startMins + ramadanDuration;
+
+    const formatMins = (mins) => {
+        let h = Math.floor(mins / 60);
+        let m = mins % 60;
+        const ampm = h >= 12 && h < 24 ? 'PM' : 'AM';
+        if (h > 12) h -= 12;
+        if (h === 0) h = 12;
+        if (h > 12) h -= 24; // Handle >24 wrapping if needed
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+    };
+
+    return `${formatMins(startMins)} - ${formatMins(endMins)}`;
+}
+
 function showCourseDetails(course) {
     const modal = document.getElementById('detailsModal');
     const content = document.getElementById('detailsContent');
     const removeBtn = document.getElementById('detailsRemoveBtn');
 
     const codeStr = formatCourseCode(course.subject, course.courseCode);
+    const isUniCourse = !!course.crn && !course.isCustom;
 
-    const schedulesHtml = course.schedules.map((s, index) => `
+    const schedulesHtml = course.schedules.map((s, index) => {
+        const ramadanTime = isUniCourse && appSettings.showRamadan ? getRamadanTime(s.time) : null;
+
+        return `
         ${index > 0 ? '<hr style="border:0; border-top:1px dashed var(--border-color); margin:10px 0;">' : ''}
         <div class="details-row"><span class="details-label"><img src="icons/days.png" class="section-icon"> Days:</span><span class="details-value">${formatDays(s.days)}</span></div>
-        <div class="details-row"><span class="details-label"><img src="icons/time.png" class="section-icon"> Time:</span><span class="details-value">${s.time}</span></div>
+        <div class="details-row"><span class="details-label"><img src="icons/time.png" class="section-icon"> Time:</span><span class="details-value">
+            ${s.time}
+            ${ramadanTime ? `<div class="ramadan-time" style="margin-top:4px; color:var(--accent-primary); font-size:13px; display:flex; align-items:center;">
+                <img src="icons/moon.png" style="width:14px; height:14px; margin-right:6px;"> ${ramadanTime}
+            </div>` : ''}
+        </span></div>
         <div class="details-row"><span class="details-label"><img src="icons/location.png" class="section-icon"> Location:</span><span class="details-value">${s.room || 'TBA'}</span></div>
         <div class="details-row"><span class="details-label"><img src="icons/instructor.png" class="section-icon"> Instructor:</span><span class="details-value">${s.instructor || 'TBA'}</span></div>
-    `).join('');
+    `}).join('');
 
     content.innerHTML = `
         <div class="details-row"><span class="details-label">Course:</span><span class="details-value">${codeStr} - ${course.title || ''}</span></div>
@@ -572,6 +976,7 @@ function showCourseDetails(course) {
     };
 
     document.getElementById('closeDetailsBtn').onclick = () => closeModal('detailsModal');
+
     modal.style.display = 'flex';
     document.body.classList.add('modal-open');
 }
@@ -580,11 +985,41 @@ function displayCourses(courses) {
     const container = document.getElementById('timetableContainer');
     if (!container) return;
 
+    // Common view switching logic (moved before early return)
+    const toggleBtn = document.getElementById('mobileViewToggle');
+    document.getElementById('scheduleControls').classList.remove('hidden');
+    document.getElementById('schedule').style.display = 'block'; // Show schedule container
+    document.querySelector('section').style.display = 'block';   // Show add-courses section
+    document.querySelector('main').style.display = 'none';       // Hide main form
+
+    if (courses.length === 0 && (typeof addedTasks === 'undefined' || addedTasks.length === 0)) {
+        container.innerHTML = `<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 40px; text-align: center; color: var(--text-secondary); height: 300px; border: 2px dashed var(--border-color); border-radius: 12px; margin-top:20px;">
+                <img src="icons/time.png" style="width: 48px; opacity: 0.3; margin-bottom: 15px; filter: grayscale(1);">
+                <p style="font-size: 1.1em; font-weight: 500;">No courses added yet</p>
+                <p style="font-size: 0.9em; margin-top:5px;">Use the search bar or "Add Task" to get started.</p>
+            </div>`;
+        generateMobileScheduleList([], container);
+        updateTotalCredits();
+
+        // Ensure mobile view toggle logic runs for empty state too (default to list)
+        const savedView = localStorage.getItem('fcitindex-mobile-view') || 'list';
+        if (savedView === 'grid') {
+            container.classList.add('mobile-grid-active');
+            container.classList.remove('mobile-list-active');
+            if (toggleBtn) toggleBtn.innerHTML = '<img src="icons/grid.png" alt=""> Switch to List View';
+        } else {
+            container.classList.add('mobile-list-active');
+            container.classList.remove('mobile-grid-active');
+            if (toggleBtn) toggleBtn.innerHTML = '<img src="icons/list.png" alt=""> Switch to Grid View';
+        }
+        return;
+    }
+
     currentTimeRange = calculateTimeRange(courses);
     const { startHour, endHour } = currentTimeRange;
     const gridHeight = (endHour - startHour) * PIXELS_PER_HOUR;
 
-    container.innerHTML = `<h3 class="schedule-title">Your Block Schedule</h3>`;
+    container.innerHTML = '';
 
     const grid = document.createElement('div');
     grid.className = 'timetable-grid';
@@ -592,8 +1027,11 @@ function displayCourses(courses) {
 
     const headerRow = document.createElement('div');
     headerRow.className = 'grid-header';
-    headerRow.innerHTML = '<div class="header-cell time-header">Time</div>';
-    DAYS.forEach(day => headerRow.innerHTML += `<div class="header-cell">${day}</div>`);
+    headerRow.innerHTML = '<div class="header-cell time-header"><img src="icons/time.png" class="header-icon" alt="Time"></div>';
+    DAYS.forEach(day => {
+        const short = day.substring(0, 2);
+        headerRow.innerHTML += `<div class="header-cell day-header" data-fullday="${day}" data-shortday="${short}">${day}</div>`;
+    });
     grid.appendChild(headerRow);
 
     const gridBody = document.createElement('div');
@@ -617,8 +1055,8 @@ function displayCourses(courses) {
 
     DAYS.forEach(day => {
         const dayColumn = document.createElement('div');
-        dayColumn.className = 'day-column';
         dayColumn.dataset.day = day;
+        dayColumn.className = 'day-column'; // Fix missing class
 
         for (let h = startHour; h <= endHour; h++) {
             const line = document.createElement('div');
@@ -638,6 +1076,38 @@ function displayCourses(courses) {
                 }
             });
         });
+
+        // Render tasks for this day
+        addedTasks.forEach(task => {
+            const dayCode = Object.keys(DAY_MAP).find(key => DAY_MAP[key] === day);
+            if (task.days.includes(dayCode)) {
+                const [startH, startM] = task.startTime.split(':').map(Number);
+                const [endH, endM] = task.endTime.split(':').map(Number);
+                const startMin = startH * 60 + startM;
+                const endMin = endH * 60 + endM;
+
+                const taskBox = document.createElement('div');
+                taskBox.className = 'course-box task-box';
+                const startOffset = startMin - startHour * 60;
+                const duration = endMin - startMin;
+                taskBox.style.top = `${(startOffset / totalMin) * 100}%`;
+                taskBox.style.height = `${(duration / totalMin) * 100}%`;
+
+                taskBox.innerHTML = `
+                    <div class="course-box-header">
+                        <span class="course-code">${task.title}</span>
+                    </div>
+                    <div class="course-detail-inline loc">
+                        <img src="icons/location.png" class="detail-icon" alt="">
+                        ${task.subtitle || '-'}
+                    </div>
+                `;
+
+                taskBox.onclick = () => showTaskDetails(task);
+                dayColumn.appendChild(taskBox);
+            }
+        });
+
         gridBody.appendChild(dayColumn);
     });
 
@@ -645,14 +1115,25 @@ function displayCourses(courses) {
     container.appendChild(grid);
 
     generateMobileScheduleList(courses, container);
+    // generateMobileGridView(courses, container);
 
-    document.getElementById('scheduleControls').classList.remove('hidden');
-    document.querySelector('section').style.display = 'block';
-    document.querySelector('main').style.display = 'none';
+    // Restore saved mobile view preference
+    const savedView = localStorage.getItem('fcitindex-mobile-view') || 'list';
+    if (savedView === 'grid') {
+        container.classList.add('mobile-grid-active');
+        container.classList.remove('mobile-list-active');
+        if (toggleBtn) toggleBtn.innerHTML = '<img src="icons/grid.png" alt=""> Switch to List View';
+    } else {
+        container.classList.add('mobile-list-active');
+        container.classList.remove('mobile-grid-active');
+        if (toggleBtn) toggleBtn.innerHTML = '<img src="icons/list.png" alt=""> Switch to Grid View';
+    }
 
     // Save schedule state whenever courses are displayed
     saveScheduleState();
+    updateTotalCredits(); // Update credits after displaying courses
 }
+
 
 function generateMobileScheduleList(courses, container) {
     let list = container.querySelector('.mobile-schedule-list');
@@ -669,10 +1150,24 @@ function generateMobileScheduleList(courses, container) {
             const p = parseScheduleTime(s);
             if (p) p.days.split('').forEach(d => {
                 const name = DAY_MAP[d];
-                if (daysWithCourses[name]) daysWithCourses[name].push({ course: c, schedule: s, start: p.startMin });
+                if (daysWithCourses[name]) daysWithCourses[name].push({ course: c, schedule: s, start: p.startMin, isTask: false });
             });
         });
     });
+
+    // Add tasks to the list
+    if (typeof addedTasks !== 'undefined') {
+        addedTasks.forEach(t => {
+            t.days.split('').forEach(d => {
+                const name = DAY_MAP[d];
+                if (daysWithCourses[name]) {
+                    const [h, m] = t.startTime.split(':').map(Number);
+                    const startMin = h * 60 + m;
+                    daysWithCourses[name].push({ task: t, start: startMin, isTask: true });
+                }
+            });
+        });
+    }
 
     DAYS.forEach(day => {
         const dayCourses = daysWithCourses[day];
@@ -684,47 +1179,193 @@ function generateMobileScheduleList(courses, container) {
 
         dayCourses.sort((a, b) => a.start - b.start);
 
-        dayCourses.forEach(({ course, schedule }) => {
-            const codeStr = formatCourseCode(course.subject, course.courseCode);
-            const card = document.createElement('div');
-            card.className = 'mobile-course-card';
-            card.dataset.courseCode = codeStr;
+        dayCourses.forEach(item => {
+            if (item.isTask) {
+                const { task } = item;
+                const card = document.createElement('div');
+                card.className = 'mobile-course-card task-card';
+                card.style.borderLeftColor = '#7c4dff'; // Task color
 
-            card.innerHTML = `
-                <div class="card-header-row">
-                    <div class="mobile-course-code">${codeStr}</div>
-                    <div class="card-badges">
-                        <span class="section-badge">${course.section}</span>
-                        <span class="crn-badge">${course.crn}</span>
-                        <span class="credits-badge">${course.credits} H</span>
-                        <button class="remove-mobile-btn" title="Remove">×</button>
+                card.innerHTML = `
+                    <div class="card-header-row">
+                        <div class="mobile-course-code" style="color: #b388ff">${task.title}</div>
+                        <div class="card-badges">
+                            <span class="section-badge" style="background: #7c4dff">TASK</span>
+                            <button class="remove-mobile-btn" title="Remove"><img src="icons/x.png" alt=""></button>
+                        </div>
                     </div>
-                </div>
-                <div class="mobile-course-title">${course.title || ''}</div>
-                <div class="course-meta">
-                    <div class="meta-row"><img src="icons/time.png" class="meta-icon"> ${schedule.time}</div>
-                    <div class="meta-row"><img src="icons/location.png" class="meta-icon"> ${schedule.room || 'TBA'}</div>
-                    <div class="meta-row"><img src="icons/instructor.png" class="meta-icon"> ${schedule.instructor || 'TBA'}</div>
-                </div>
-            `;
+                    <div class="mobile-course-title">${task.subtitle || ''}</div>
+                    <div class="course-meta">
+                        <div class="meta-row"><img src="icons/time.png" class="meta-icon"> ${task.startTime} - ${task.endTime}</div>
+                        ${task.description ? `<div class="meta-row" style="font-style: italic; color: var(--text-muted); margin-top: 4px;">${task.description}</div>` : ''}
+                    </div>
+                `;
 
-            card.querySelector('.remove-mobile-btn').onclick = (e) => {
-                e.stopPropagation();
-                removeCourse(codeStr);
-            };
+                const removeBtn = card.querySelector('.remove-mobile-btn');
+                removeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    if (confirm('Remove task?')) removeTask(task.id);
+                };
 
-            group.appendChild(card);
+                card.onclick = () => showTaskDetails(task);
+                group.appendChild(card);
+            } else {
+                const { course, schedule } = item;
+                const codeStr = formatCourseCode(course.subject, course.courseCode);
+                const card = document.createElement('div');
+                card.className = 'mobile-course-card';
+                card.dataset.courseCode = codeStr;
+
+                const ramadanTime = !course.isCustom ? getRamadanTime(schedule.time) : null;
+                const ramadanHtml = ramadanTime ? `<span class="ramadan-time-inline"><img src="icons/moon.png" class="meta-icon"> ${ramadanTime}</span>` : '';
+
+                card.innerHTML = `
+                    <div class="card-header-row">
+                        <div class="mobile-course-code">${codeStr}</div>
+                        <div class="card-badges">
+                            <span class="section-badge">${course.section}</span>
+                            <span class="crn-badge">${course.crn}</span>
+                            <span class="credits-badge">${course.credits} H</span>
+                            <button class="remove-mobile-btn" title="Remove"><img src="icons/x.png" alt=""></button>
+                        </div>
+                    </div>
+                    <div class="mobile-course-title">${course.title || ''}</div>
+                    <div class="course-meta">
+                        <div class="meta-row"><img src="icons/time.png" class="meta-icon"> ${schedule.time} ${ramadanHtml}</div>
+                        <div class="meta-row"><img src="icons/location.png" class="meta-icon"> ${schedule.room || 'TBA'}</div>
+                        <div class="meta-row"><img src="icons/instructor.png" class="meta-icon"> ${schedule.instructor || 'TBA'}</div>
+                    </div>
+                `;
+
+                const removeBtn = card.querySelector('.remove-mobile-btn');
+                removeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    removeCourse(codeStr);
+                };
+
+                card.onclick = () => showCourseDetails(course);
+                group.appendChild(card);
+            }
         });
 
         list.appendChild(group);
     });
 
-    // Show empty message if no courses
+    container.appendChild(list);
+
+    // Apply settings immediately after rendering list
+    if (typeof applySettings === 'function') applySettings();
+}
+
+// Generate compact mobile grid view (alternative to list view)
+function generateMobileGridView(courses, container) {
+    let grid = container.querySelector('.mobile-schedule-grid');
+    if (grid) grid.remove();
+
+    grid = document.createElement('div');
+    grid.className = 'mobile-schedule-grid';
+
+    // Calculate time range
+    const { startHour, endHour } = currentTimeRange;
+    const totalMinutes = (endHour - startHour) * 60;
+    const gridHeight = Math.max(300, (endHour - startHour) * 50); // 50px per hour
+
+    // Create header row
+    const header = document.createElement('div');
+    header.className = 'mobile-grid-header';
+    const timeHeader = document.createElement('div');
+    timeHeader.className = 'mobile-grid-header-cell';
+    timeHeader.style.display = 'flex';
+    timeHeader.style.alignItems = 'center';
+    timeHeader.style.justifyContent = 'center';
+    timeHeader.innerHTML = '<img src="icons/time.png" style="width:16px; height:16px; opacity:0.7;">';
+    header.appendChild(timeHeader);
+    DAYS.forEach(day => {
+        const abbrev = day.substring(0, 2);
+        header.innerHTML += `<div class="header-cell">${abbrev}</div>`;
+    });
+    grid.appendChild(header);
+
+    // Create grid body
+    const body = document.createElement('div');
+    body.className = 'mobile-grid-body';
+    body.style.height = `${gridHeight}px`;
+
+    // Time column
+    const timeCol = document.createElement('div');
+    timeCol.className = 'mobile-time-column';
+    for (let h = startHour; h <= endHour; h++) {
+        const label = document.createElement('div');
+        label.className = 'mobile-time-label';
+        const top = ((h - startHour) * 60 / totalMinutes) * 100;
+        label.style.top = `${top}%`;
+        label.textContent = h > 12 ? (h - 12) : h;
+        timeCol.appendChild(label);
+    }
+    body.appendChild(timeCol);
+
+    // Day columns with courses
+    DAYS.forEach(day => {
+        const dayCol = document.createElement('div');
+        dayCol.className = 'mobile-day-column';
+
+        // Hour lines
+        for (let h = startHour; h <= endHour; h++) {
+            const line = document.createElement('div');
+            line.className = 'mobile-hour-line';
+            line.style.top = `${((h - startHour) * 60 / totalMinutes) * 100}%`;
+            dayCol.appendChild(line);
+        }
+
+        // Add courses for this day
+        courses.forEach(course => {
+            course.schedules.forEach(schedule => {
+                const parsed = parseScheduleTime(schedule);
+                if (!parsed) return;
+
+                const dayCodes = parsed.days.split('');
+                const dayNames = dayCodes.map(d => DAY_MAP[d]);
+
+                if (dayNames.includes(day)) {
+                    const block = document.createElement('div');
+                    block.className = 'mobile-course-block';
+
+                    // Calculate position
+                    const startOffset = parsed.startMin - (startHour * 60);
+                    const duration = parsed.endMin - parsed.startMin;
+                    const topPercent = (startOffset / totalMinutes) * 100;
+                    const heightPercent = (duration / totalMinutes) * 100;
+
+                    block.style.top = `${topPercent}%`;
+                    block.style.height = `${heightPercent}%`;
+
+                    const codeStr = formatCourseCode(course.subject, course.courseCode);
+                    const location = schedule.room || 'TBA';
+
+                    block.innerHTML = `
+                        <div class="mobile-course-code">${codeStr}</div>
+                        <div class="mobile-course-location">${location}</div>
+                    `;
+
+                    // Click to show details
+                    block.onclick = () => showCourseDetails(course, schedule);
+
+                    dayCol.appendChild(block);
+                }
+            });
+        });
+
+        body.appendChild(dayCol);
+    });
+
+    grid.appendChild(body);
+
+    // Empty state
     if (courses.length === 0) {
-        list.innerHTML = '<div class="empty-schedule-msg">No courses added to your schedule yet</div>';
+        grid.innerHTML = '<div class="empty-schedule-msg" style="padding: 40px; text-align: center;">No courses added to your schedule yet</div>';
     }
 
-    container.appendChild(list);
+    container.appendChild(grid);
 }
 
 // ==========================================
@@ -811,7 +1452,7 @@ async function showSectionChoices(code) {
     document.getElementById('filterSection').value = '';
     document.getElementById('filterCrn').value = '';
     document.getElementById('filterStartTime').value = '';
-    document.getElementById('filterConflict').checked = true;
+    document.getElementById('filterConflict').checked = false;
     document.querySelectorAll('input[name="filterDay"]').forEach(cb => cb.checked = false);
 
     try {
@@ -822,12 +1463,17 @@ async function showSectionChoices(code) {
         apiUrl.searchParams.append('gender', gender);
         apiUrl.searchParams.append('limit', '50');
 
-        const response = await fetch(apiUrl);
+        const response = await fetchWithTimeout(apiUrl.toString());
+
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}`);
+        }
+
         const result = await response.json();
         list.innerHTML = '';
 
-        if (result.data.length === 0) {
-            list.innerHTML = '<p class="no-results-msg">No sections found.</p>';
+        if (!result.data || result.data.length === 0) {
+            list.innerHTML = '<p class="no-results-msg">No sections found for this course.</p>';
             return;
         }
 
@@ -890,7 +1536,11 @@ async function showSectionChoices(code) {
         applyFilters();
 
     } catch (e) {
-        list.innerHTML = '<p class="error-msg">Error fetching sections.</p>';
+        console.error('Section fetch error:', e);
+        const errorMessage = e.isNetworkError
+            ? e.message
+            : 'Could not load sections. Please check your connection.';
+        list.innerHTML = `<p class="error-msg">${errorMessage}</p>`;
     }
 }
 
@@ -954,7 +1604,7 @@ function getAllCoursesFromGrid() {
     const courses = [];
     const seen = new Set();
     document.querySelectorAll('.course-box').forEach(box => {
-        if (!seen.has(box.courseData.crn)) {
+        if (box.courseData && !seen.has(box.courseData.crn)) {
             courses.push(box.courseData);
             seen.add(box.courseData.crn);
         }
@@ -1007,6 +1657,12 @@ function addCourseToGrid(course) {
 document.addEventListener('DOMContentLoaded', () => {
     populateTimeFilter();
     restoreFormState();
+
+    // Initialize tasks and settings
+    loadTasks();
+    loadSettings();
+    initTaskListeners();
+    initSettingsListeners();
 
     // Restore schedule after form state is fully restored
     setTimeout(() => {
@@ -1140,7 +1796,12 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 // Male flow: Fetch block schedule from API
                 const url = `https://api.kauindex.com/search?termCode=202602&section=${block}&gender=${gender}&level=بكالوريوس&limit=100`;
-                const res = await fetch(url);
+                const res = await fetchWithTimeout(url);
+
+                if (!res.ok) {
+                    throw new Error(`Server returned ${res.status}`);
+                }
+
                 const json = await res.json();
 
                 if (json.status === 'success' && json.data.length) {
@@ -1155,8 +1816,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         } catch (err) {
-            await showConfirmModal('Connection Error', 'Could not load schedule. Please try again later.');
-            return;
+            console.error('Load schedule error:', err);
+            const errorMessage = err.isNetworkError
+                ? err.message
+                : 'Could not load schedule. Please check your internet connection and try again.';
+
+            // Use simple alert for errors - modal blocks if not visible
+            alert('Connection Error\n\n' + errorMessage);
         } finally {
             btn.textContent = 'Load Block Schedule';
             btn.disabled = false;
@@ -1180,10 +1846,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirmed) {
             document.getElementById('timetableContainer').innerHTML = '';
             document.getElementById('scheduleControls').classList.add('hidden');
+            document.getElementById('schedule').style.display = 'none'; // Hide schedule container
             document.querySelector('section').style.display = 'none';
             document.querySelector('main').style.display = 'block';
             // Keep form values - don't reset
             saveScheduleState(); // Clear saved schedule
+            addedTasks = []; // Clear tasks
+            saveTasks(); // Save empty tasks
+            refreshSchedule(); // Refresh to show empty state - wait, if main is blocked, we don't want refresh?
+            // Actually refreshSchedule calls displayCourses which shows schedule.
+            // If we cleared everything, we want to go back to FORM view.
+            // So we should NOT call refreshSchedule, just clear state.
+            localStorage.removeItem('scheduleState');
         }
     });
 
@@ -1194,19 +1868,151 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirmed) {
             document.getElementById('timetableContainer').innerHTML = '';
             document.getElementById('scheduleControls').classList.add('hidden');
+            document.getElementById('schedule').style.display = 'none'; // Hide schedule container
             document.querySelector('section').style.display = 'none';
             document.querySelector('main').style.display = 'block';
-            saveScheduleState(); // Clear saved schedule
+
+            localStorage.removeItem('scheduleState');
+            addedTasks = [];
+            saveTasks();
         }
     });
 
-    // ESC key closes modals
+    // Mobile view toggle (list <-> grid)
+    document.getElementById('mobileViewToggle')?.addEventListener('click', () => {
+        const container = document.getElementById('timetableContainer');
+        const toggleBtn = document.getElementById('mobileViewToggle');
+        const isGridActive = container.classList.contains('mobile-grid-active');
+
+        if (isGridActive) {
+            // Switch to list view
+            container.classList.remove('mobile-grid-active');
+            container.classList.add('mobile-list-active');
+            toggleBtn.innerHTML = '<img src="icons/grid.png" alt=""> Switch to Grid View';
+            localStorage.setItem('fcitindex-mobile-view', 'list');
+        } else {
+            // Switch to grid view
+            container.classList.remove('mobile-list-active');
+            container.classList.add('mobile-grid-active');
+            toggleBtn.innerHTML = '<img src="icons/list.png" alt=""> Switch to List View';
+            localStorage.setItem('fcitindex-mobile-view', 'grid');
+        }
+    });
+
+    // Custom Course Handlers
+    document.getElementById('openCustomModalBtn')?.addEventListener('click', () => {
+        document.getElementById('customCourseModal').style.display = 'flex';
+        document.body.classList.add('modal-open');
+    });
+
+    document.getElementById('closeCustomBtn')?.addEventListener('click', () => {
+        closeModal('customCourseModal');
+    });
+
+    document.getElementById('addCustomEntryBtn')?.addEventListener('click', () => {
+        // Collect Full Fields
+        const code = document.getElementById('customCode').value.trim().toUpperCase();
+        const title = document.getElementById('customTitle').value.trim();
+        const section = document.getElementById('customSection').value.trim().toUpperCase();
+        const crn = document.getElementById('customCrn').value.trim();
+        const credits = document.getElementById('customCredits').value.trim();
+        const instructor = document.getElementById('customInstructor').value.trim();
+        const days = Array.from(document.querySelectorAll('input[name="customDay"]:checked')).map(c => c.value).join('');
+        const start = document.getElementById('customStartTime').value;
+        const end = document.getElementById('customEndTime').value;
+        const loc = document.getElementById('customLocation').value.trim();
+        const err = document.getElementById('customErrorMsg');
+
+        // Validation based on "all fields required"
+        if (!code || !title || !section || !crn || !credits || !instructor || !days || !start || !end || !loc) {
+            err.textContent = 'Please fill in ALL fields.';
+            err.style.display = 'block';
+            return;
+        }
+
+        if (start >= end) {
+            err.textContent = 'Start time must be before end time.';
+            err.style.display = 'block';
+            return;
+        }
+
+        // Check duplicates (CRN)
+        const existing = getAllCoursesFromGrid();
+        if (existing.some(c => c.crn === crn)) {
+            err.textContent = 'A course with this CRN already exists on your schedule.';
+            err.style.display = 'block';
+            return;
+        }
+
+        err.style.display = 'none';
+
+        // Format times
+        const formatTime = (t) => {
+            const [h, m] = t.split(':').map(Number);
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            const h12 = h % 12 || 12;
+            return `${h12}:${m.toString().padStart(2, '0')} ${ampm}`;
+        };
+
+        const timeStr = `${formatTime(start)} - ${formatTime(end)}`;
+
+        // Separate Subject and Number from Code (e.g. CS-101 -> Subject: CS, Code: 101)
+        let subject = '';
+        let courseNum = code;
+        if (code.includes('-')) {
+            const parts = code.split('-');
+            subject = parts[0];
+            courseNum = parts.slice(1).join('-'); // Handle codes like CPCS-203
+        }
+
+        const course = {
+            title: title,
+            subject: subject,
+            courseCode: courseNum,
+            section: section,
+            crn: crn, // User provided
+            credits: credits,
+            primaryInstructor: instructor,
+            isCustom: true,
+            schedules: [{
+                days: days,
+                time: timeStr,
+                room: loc,
+                instructor: instructor
+            }]
+        };
+
+        saveCustomCourse(course);
+        handleCourseAddition(course);
+        closeModal('customCourseModal');
+
+        // Reset inputs
+        document.getElementById('customCode').value = '';
+        document.getElementById('customTitle').value = '';
+        document.getElementById('customSection').value = '';
+        document.getElementById('customCrn').value = '';
+        document.getElementById('customCredits').value = '';
+        document.getElementById('customInstructor').value = '';
+        document.querySelectorAll('input[name="customDay"]').forEach(c => c.checked = false);
+        document.getElementById('customStartTime').value = '';
+        document.getElementById('customEndTime').value = '';
+        document.getElementById('customLocation').value = '';
+    });
+
+    // ESC key closes modals (added custom)
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             closeModal('modal');
             closeModal('detailsModal');
             closeModal('confirmModal');
+            closeModal('customCourseModal');
+            document.getElementById('settingsModal')?.classList.remove('active');
+            document.getElementById('taskModal')?.classList.remove('active');
         }
+    });
+
+    document.getElementById('customCourseModal')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeModal('customCourseModal');
     });
 
     // Click outside modal content closes modal
@@ -1227,3 +2033,293 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+// ===== TASKS FUNCTIONALITY =====
+let addedTasks = [];
+
+function saveTasks() {
+    localStorage.setItem('fcitindex-tasks', JSON.stringify(addedTasks));
+}
+
+function loadTasks() {
+    const saved = localStorage.getItem('fcitindex-tasks');
+    if (saved) {
+        addedTasks = JSON.parse(saved);
+    }
+}
+
+function addTask(taskData) {
+    const task = {
+        id: 'task_' + Date.now(),
+        title: taskData.title,
+        subtitle: taskData.subtitle,
+        days: taskData.days,
+        startTime: taskData.startTime,
+        endTime: taskData.endTime,
+        description: taskData.description || '',
+        isTask: true
+    };
+
+    addedTasks.push(task);
+    saveTasks();
+    refreshSchedule();
+    showToast('Task added: ' + task.title);
+    return task;
+}
+
+function removeTask(taskId) {
+    addedTasks = addedTasks.filter(t => t.id !== taskId);
+    saveTasks();
+    refreshSchedule();
+    showToast('Task removed');
+}
+
+function showTaskDetails(task) {
+    const modal = document.getElementById('detailsModal');
+    const title = document.getElementById('detailsTitle');
+    const content = document.getElementById('detailsContent');
+    const removeBtn = document.getElementById('detailsRemoveBtn');
+
+    title.textContent = 'Task Details';
+
+    const dayNames = task.days.split('').map(d => DAY_MAP[d] || d).join(', ');
+
+    content.innerHTML = `
+        <div class="details-row">
+            <span class="details-label">Title</span>
+            <span class="details-value">${task.title}</span>
+        </div>
+        <div class="details-row">
+            <span class="details-label">Subtitle</span>
+            <span class="details-value">${task.subtitle || '-'}</span>
+        </div>
+        <div class="details-row">
+            <span class="details-label">Days</span>
+            <span class="details-value">${dayNames}</span>
+        </div>
+        <div class="details-row">
+            <span class="details-label">Time</span>
+            <span class="details-value">${task.startTime} - ${task.endTime}</span>
+        </div>
+        ${task.description ? `
+        <div class="details-row">
+            <span class="details-label">Description</span>
+            <span class="details-value">${task.description}</span>
+        </div>
+        ` : ''}
+    `;
+
+    removeBtn.textContent = 'Remove Task';
+    removeBtn.onclick = () => {
+        removeTask(task.id);
+        closeModal('detailsModal'); // Use the common closeModal function
+    };
+
+    modal.style.display = 'flex'; // Use display:flex for modals
+    document.body.classList.add('modal-open');
+}
+
+// ===== SETTINGS FUNCTIONALITY =====
+const defaultSettings = {
+    showRamadan: false,
+    showCrn: true,
+    showCredits: true
+};
+
+let appSettings = { ...defaultSettings };
+
+function saveSettings() {
+    localStorage.setItem('fcitindex-settings', JSON.stringify(appSettings));
+    applySettings();
+}
+
+function loadSettings() {
+    const saved = localStorage.getItem('fcitindex-settings');
+    if (saved) {
+        appSettings = { ...defaultSettings, ...JSON.parse(saved) };
+    }
+    applySettings();
+    syncSettingsUI();
+}
+
+function syncSettingsUI() {
+    const ramadanToggle = document.getElementById('settingRamadan');
+    const crnToggle = document.getElementById('settingCrn');
+    const creditsToggle = document.getElementById('settingCredits');
+
+    if (ramadanToggle) ramadanToggle.checked = appSettings.showRamadan;
+    if (crnToggle) crnToggle.checked = appSettings.showCrn;
+    if (creditsToggle) creditsToggle.checked = appSettings.showCredits;
+}
+
+function applySettings() {
+    // Apply Ramadan visibility
+    document.querySelectorAll('.ramadan-time, .ramadan-time-inline').forEach(el => {
+        el.style.display = appSettings.showRamadan ? '' : 'none';
+    });
+
+    // Apply CRN visibility in mobile list
+    document.querySelectorAll('.mobile-course-card .crn-badge').forEach(el => {
+        el.style.display = appSettings.showCrn ? '' : 'none';
+    });
+
+    // Apply Credits visibility in mobile list
+    document.querySelectorAll('.mobile-course-card .credits-badge').forEach(el => {
+        el.style.display = appSettings.showCredits ? '' : 'none';
+    });
+}
+
+// Initialize settings event listeners
+function initSettingsListeners() {
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsModal = document.getElementById('settingsModal');
+    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+
+    if (settingsBtn && settingsModal) {
+        settingsBtn.onclick = (e) => {
+            e.stopPropagation();
+            settingsModal.style.display = 'flex';
+            document.body.classList.add('modal-open'); // Lock scroll
+        };
+    }
+
+    if (closeSettingsBtn && settingsModal) {
+        closeSettingsBtn.onclick = () => {
+            settingsModal.style.display = 'none';
+            document.body.classList.remove('modal-open'); // Unlock scroll
+        };
+    }
+
+    if (settingsModal) {
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) {
+                settingsModal.style.display = 'none';
+                document.body.classList.remove('modal-open'); // Unlock scroll
+            }
+        });
+    }
+
+    const ramadanToggle = document.getElementById('settingRamadan');
+    const crnToggle = document.getElementById('settingCrn');
+    const creditsToggle = document.getElementById('settingCredits');
+
+    if (ramadanToggle) {
+        ramadanToggle.checked = appSettings.showRamadan;
+        ramadanToggle.onchange = () => {
+            appSettings.showRamadan = ramadanToggle.checked;
+            saveSettings();
+            applySettings();
+        };
+    }
+
+    if (crnToggle) {
+        crnToggle.checked = appSettings.showCrn;
+        crnToggle.onchange = () => {
+            appSettings.showCrn = crnToggle.checked;
+            saveSettings();
+            applySettings();
+        };
+    }
+
+    if (creditsToggle) {
+        creditsToggle.checked = appSettings.showCredits;
+        creditsToggle.onchange = () => {
+            appSettings.showCredits = creditsToggle.checked;
+            saveSettings();
+            applySettings();
+        };
+    }
+}
+
+// Initialize task modal listeners
+function initTaskListeners() {
+    const openTaskBtn = document.getElementById('openTaskModalBtn');
+    const taskModal = document.getElementById('taskModal');
+    const closeTaskBtn = document.getElementById('closeTaskModalBtn');
+    const addTaskBtn = document.getElementById('addTaskBtn');
+
+    if (openTaskBtn && taskModal) {
+        openTaskBtn.onclick = (e) => {
+            e.stopPropagation();
+            taskModal.style.display = 'flex';
+            document.body.classList.add('modal-open'); // Lock scroll
+        };
+    }
+
+    if (closeTaskBtn && taskModal) {
+        closeTaskBtn.onclick = () => {
+            taskModal.style.display = 'none';
+            document.body.classList.remove('modal-open'); // Unlock scroll
+        };
+    }
+
+    if (taskModal) {
+        taskModal.onclick = (e) => {
+            if (e.target === taskModal) {
+                taskModal.style.display = 'none';
+                document.body.classList.remove('modal-open'); // Unlock scroll
+            }
+        };
+    }
+
+    if (addTaskBtn) {
+        addTaskBtn.onclick = () => {
+            const title = document.getElementById('taskTitle').value;
+            const subtitle = document.getElementById('taskSubtitle').value;
+            const startTime = document.getElementById('taskStartTime').value;
+            const endTime = document.getElementById('taskEndTime').value;
+            const description = document.getElementById('taskDescription').value;
+
+            const selectedDays = [];
+            document.querySelectorAll('input[name="taskDay"]:checked').forEach(cb => {
+                selectedDays.push(cb.value);
+            });
+
+            if (!title || !startTime || !endTime || selectedDays.length === 0) {
+                showToast('Please fill in required fields');
+                return;
+            }
+
+            addTask({
+                title,
+                subtitle,
+                days: selectedDays.join(''),
+                startTime,
+                endTime,
+                description
+            });
+
+            // Clear inputs
+            document.getElementById('taskTitle').value = '';
+            document.getElementById('taskSubtitle').value = '';
+            document.getElementById('taskStartTime').value = '';
+            document.getElementById('taskEndTime').value = '';
+            document.getElementById('taskDescription').value = '';
+            document.querySelectorAll('input[name="taskDay"]').forEach(cb => cb.checked = false);
+
+            taskModal.style.display = 'none';
+            document.body.classList.remove('modal-open'); // Unlock scroll
+        };
+    }
+}
+
+// ===== CREDITS CALCULATION =====
+function updateTotalCredits() {
+    const allCourses = getAllCoursesFromGrid();
+    let total = 0;
+
+    allCourses.forEach(c => {
+        // Custom courses might store credits differently or as string
+        const creds = parseFloat(c.credits) || 0;
+        total += creds;
+    });
+
+    const badge = document.getElementById('totalCreditsCount');
+    if (badge) badge.textContent = total;
+}
+
+// Function to refresh schedule (called by addTask, etc)
+function refreshSchedule() {
+    const courses = getAllCoursesFromGrid();
+    displayCourses(courses);
+    updateTotalCredits();
+}

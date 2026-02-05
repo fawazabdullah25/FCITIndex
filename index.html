@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FCITIndex</title>
     <link rel="stylesheet" href="style.css" />
+    <link rel="icon" type="image/png" href="icons/favicon.png">
 </head>
 
 <body>
@@ -15,20 +16,46 @@
             <span class="logo-tagline">Build Your FCIT Schedule</span>
         </button>
 
-        <button id="themeToggle" class="theme-toggle" title="Toggle Light/Dark Mode">
-            <img src="icons/moon.png" alt="" class="theme-icon">
-        </button>
+        <div class="header-actions">
+            <button id="settingsBtn" class="settings-toggle" title="Settings">
+                <img src="icons/settings.png" alt="" class="settings-icon">
+            </button>
+            <button id="themeToggle" class="theme-toggle" title="Toggle Light/Dark Mode">
+                <img src="icons/moon.png" alt="" class="theme-icon">
+            </button>
+        </div>
     </header>
 
     <div id="schedule">
+        <!-- Header Controls (Credits Only) -->
+        <div id="scheduleHeader" class="schedule-header"
+            style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 10px; padding: 0 5px;">
+            <!-- Duplicate h2 removed -->
+            <div class="total-credits-badge"
+                style="background: var(--bg-card); padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.9rem; font-weight: 600; color: var(--accent-primary);">
+                <span id="totalCreditsCount">0</span> Credits
+            </div>
+        </div>
         <div id="timetableContainer"></div>
         <div id="scheduleControls" class="hidden">
+            <button id="mobileViewToggle" class="mobile-view-toggle">
+                <img src="icons/grid.png" alt=""> Switch to Grid View
+            </button>
             <button id="clearScheduleBtn">Reset Schedule</button>
         </div>
     </div>
 
     <section>
         <h3>Add Other Courses</h3>
+
+        <div class="search-container">
+            <div class="search-pill">
+                <input type="text" id="courseInput" placeholder="Search for any course (e.g., MATH-202)">
+                <button id="fetchBtn" title="Search">
+                    <img src="icons/search.png" alt="" class="search-icon">
+                </button>
+            </div>
+        </div>
 
         <div id="suggestions">
             <p>Suggested for your term:</p>
@@ -43,7 +70,9 @@
                         <button id="mobileFilterToggle" class="mobile-filter-toggle" title="Toggle Filters">
                             <img src="icons/filter.png" alt="" class="filter-toggle-icon">
                         </button>
-                        <button onclick="closeModal('modal')" class="modal-close-btn" title="Close">×</button>
+                        <button onclick="closeModal('modal')" class="modal-close-btn" title="Close">
+                            <img src="icons/x.png" alt="">
+                        </button>
                     </div>
                 </div>
 
@@ -101,11 +130,103 @@
             </div>
         </div>
 
+        <div class="add-custom-container action-buttons-row">
+            <button id="openCustomModalBtn" class="action-btn custom-course-btn">
+                <img src="icons/add.png" alt="" class="btn-icon"> ADD OTHER COURSE
+            </button>
+            <button id="openTaskModalBtn" class="action-btn task-btn">
+                <img src="icons/add.png" alt="" class="btn-icon"> ADD TASK
+            </button>
+        </div>
+
+        <!-- Custom Course Modal -->
+        <!-- Custom Course Modal -->
+        <!-- Custom Course Modal (Standardized) -->
+        <div id="customCourseModal" class="modal-overlay">
+            <div class="modal-content details-modal">
+                <div class="modal-header">
+                    <h3>Add Other Course</h3>
+                    <button id="closeCustomBtn" class="modal-close-btn">
+                        <img src="icons/x.png" alt="">
+                    </button>
+                </div>
+                <div class="modal-body filters-panel form-panel-full">
+                    <div class="filter-row-pair">
+                        <div class="filter-row">
+                            <label class="filter-label">Course Code</label>
+                            <input type="text" id="customCode" placeholder="e.g. MATH-101">
+                        </div>
+                        <div class="filter-row">
+                            <label class="filter-label">Course Title</label>
+                            <input type="text" id="customTitle" placeholder="e.g. Calculus I">
+                        </div>
+                    </div>
+
+                    <div class="filter-row-pair">
+                        <div class="filter-row">
+                            <label class="filter-label">Section</label>
+                            <input type="text" id="customSection" placeholder="e.g. AA">
+                        </div>
+                        <div class="filter-row">
+                            <label class="filter-label">CRN</label>
+                            <input type="number" id="customCrn" placeholder="CRN">
+                        </div>
+                    </div>
+
+                    <div class="filter-row-pair">
+                        <div class="filter-row">
+                            <label class="filter-label">Credits</label>
+                            <input type="number" id="customCredits" placeholder="3">
+                        </div>
+                        <div class="filter-row">
+                            <label class="filter-label">Room</label>
+                            <input type="text" id="customRoom" placeholder="Room 101">
+                        </div>
+                    </div>
+
+                    <div class="filter-row-pair">
+                        <div class="filter-row">
+                            <label class="filter-label">Instructor</label>
+                            <input type="text" id="customInstructor" placeholder="Name">
+                        </div>
+                    </div>
+
+                    <div class="filter-row day-checkboxes">
+                        <label class="filter-label" style="width:100%">Days</label>
+                        <div class="day-checkboxes">
+                            <label><input type="checkbox" name="customDay" value="U"> Sun</label>
+                            <label><input type="checkbox" name="customDay" value="M"> Mon</label>
+                            <label><input type="checkbox" name="customDay" value="T"> Tue</label>
+                            <label><input type="checkbox" name="customDay" value="W"> Wed</label>
+                            <label><input type="checkbox" name="customDay" value="R"> Thu</label>
+                        </div>
+                    </div>
+
+                    <div class="filter-row-pair">
+                        <div class="filter-row">
+                            <label class="filter-label">Start Time</label>
+                            <input type="time" id="customStartTime">
+                        </div>
+                        <div class="filter-row">
+                            <label class="filter-label">End Time</label>
+                            <input type="time" id="customEndTime">
+                        </div>
+                    </div>
+
+                    <button id="addCustomEntryBtn"
+                        style="width: 100%; padding: 12px; background: var(--accent-primary); color: var(--bg-primary); border: none; border-radius: 8px; font-weight: 600; cursor: pointer; text-transform: uppercase; margin-top: 15px;">ADD
+                        COURSE</button>
+                </div>
+            </div>
+        </div>
+
         <div id="detailsModal" class="modal-overlay">
             <div class="modal-content details-modal">
                 <div class="modal-header">
                     <h3 id="detailsTitle">Course Details</h3>
-                    <button id="closeDetailsBtn" class="modal-close-btn">×</button>
+                    <button id="closeDetailsBtn" class="modal-close-btn">
+                        <img src="icons/x.png" alt="">
+                    </button>
                 </div>
                 <div class="details-body" id="detailsContent">
                 </div>
@@ -126,12 +247,110 @@
             </div>
         </div>
 
-        <div class="search-container">
-            <div class="search-pill">
-                <input type="text" id="courseInput" placeholder="Search for any course (e.g., MATH-202)">
-                <button id="fetchBtn" title="Search">
-                    <img src="icons/search.png" alt="" class="search-icon">
-                </button>
+
+        <!-- Task Modal -->
+        <!-- Task Modal (Standardized) -->
+        <div id="taskModal" class="modal-overlay">
+            <div class="modal-content details-modal">
+                <div class="modal-header">
+                    <h3>Add Task</h3>
+                    <button id="closeTaskModalBtn" class="modal-close-btn">
+                        <img src="icons/x.png" alt="">
+                    </button>
+                </div>
+                <div class="modal-body filters-panel form-panel-full">
+                    <div class="filter-row-pair">
+                        <div class="filter-row">
+                            <label class="filter-label">Title</label>
+                            <input type="text" id="taskTitle" placeholder="e.g., Study Session">
+                        </div>
+                    </div>
+                    <div class="filter-row-pair">
+                        <div class="filter-row">
+                            <label class="filter-label">Subtitle</label>
+                            <input type="text" id="taskSubtitle" placeholder="e.g., Library Room 3">
+                        </div>
+                    </div>
+
+                    <div class="filter-row day-checkboxes">
+                        <label class="filter-label" style="width:100%">Days</label>
+                        <div class="day-checkboxes">
+                            <label><input type="checkbox" name="taskDay" value="U"> Sun</label>
+                            <label><input type="checkbox" name="taskDay" value="M"> Mon</label>
+                            <label><input type="checkbox" name="taskDay" value="T"> Tue</label>
+                            <label><input type="checkbox" name="taskDay" value="W"> Wed</label>
+                            <label><input type="checkbox" name="taskDay" value="R"> Thu</label>
+                        </div>
+                    </div>
+
+                    <div class="filter-row-pair">
+                        <div>
+                            <label class="filter-label">Start Time</label>
+                            <input type="time" id="taskStartTime">
+                        </div>
+                        <div>
+                            <label class="filter-label">End Time</label>
+                            <input type="time" id="taskEndTime">
+                        </div>
+                    </div>
+
+                    <div class="filter-row-pair">
+                        <div class="filter-row">
+                            <label class="filter-label">Description</label>
+                            <textarea id="taskDescription" rows="3" placeholder="Notes..."></textarea>
+                        </div>
+                    </div>
+
+                    <button id="addTaskBtn"
+                        style="width: 100%; padding: 12px; background: var(--accent-primary); color: var(--bg-primary); border: none; border-radius: 8px; font-weight: 600; cursor: pointer; text-transform: uppercase; margin-top: 15px;">ADD
+                        TASK</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settingsModal" class="modal-overlay">
+            <div class="modal-content settings-modal">
+                <div class="modal-header">
+                    <h3>Settings</h3>
+                    <button id="closeSettingsBtn" class="modal-close-btn">
+                        <img src="icons/x.png" alt="">
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="setting-row">
+                        <div class="setting-info">
+                            <span class="setting-label">Show Ramadan Times</span>
+                            <span class="setting-desc">Display expected Ramadan lecture times</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settingRamadan">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="setting-row">
+                        <div class="setting-info">
+                            <span class="setting-label">Show CRN in List</span>
+                            <span class="setting-desc">Display CRN badge in mobile list view</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settingCrn" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="setting-row">
+                        <div class="setting-info">
+                            <span class="setting-label">Show Credits in List</span>
+                            <span class="setting-desc">Display credit hours in mobile list view</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settingCredits" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
