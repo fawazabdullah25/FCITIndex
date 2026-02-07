@@ -271,7 +271,9 @@ async function restoreScheduleState() {
 
         if (!state.isOnSchedule || state.crns.length === 0) return;
 
-        const gender = document.getElementById('gender').value;
+        const genderVal = state.gender || document.getElementById('gender').value;
+        if (state.gender) document.getElementById('gender').value = state.gender;
+        const gender = genderVal;
 
         // Show schedule view
         displayCourses([]);
@@ -285,12 +287,16 @@ async function restoreScheduleState() {
                     addCourseToGrid(custom);
                 } else {
                     // Otherwise try API
-                    const url = `https://api.kauindex.com/search?termCode=202602&crn=${crn}&gender=${gender}&limit=1`;
+                    // Otherwise try API
+                    let url = `https://api.kauindex.com/search?termCode=202602&crn=${crn}&limit=1`;
+                    // Only append gender if valid, avoiding 400 Bad Request on empty
+                    if (gender) url += `&gender=${gender}`;
+
                     const res = await fetch(url);
                     const json = await res.json();
 
                     if (json.status === 'success' && json.data.length > 0) {
-                        addCourseToGrid(json.data[0]);
+                        addCourseToGrid(normalizeCourse(json.data[0]));
                     }
                 }
             } catch (err) {
@@ -304,146 +310,7 @@ async function restoreScheduleState() {
     }
 }
 
-// ==========================================
-// UTILITY FUNCTIONS
-// ==========================================
 
-// Fetch with timeout to prevent infinite loading when API is down
-async function fetchWithTimeout(url, options = {}, timeout = 15000) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-    try {
-        const response = await fetch(url, {
-            ...options,
-            signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        return response;
-    } catch (error) {
-        clearTimeout(timeoutId);
-        // Create a custom error with a flag for easy identification
-        const networkError = new Error(
-            error.name === 'AbortError'
-                ? 'Request timed out after 15 seconds.'
-                : 'Network connection failed. Server may be unavailable.'
-        );
-        networkError.isNetworkError = true;
-        networkError.originalError = error;
-        throw networkError;
-    }
-}
-
-function formatCourseCode(subject, code) {
-    if (!subject || subject === '') return code;
-    return `${subject}-${code}`;
-}
-
-function parseTime(timeStr) {
-    const [time, ampm] = timeStr.split(' ');
-    let [hour, min] = time.split(':').map(Number);
-    if (ampm === 'PM' && hour < 12) hour += 12;
-    if (ampm === 'AM' && hour === 12) hour = 0;
-    return (hour * 60) + min;
-}
-
-function parseScheduleTime(schedule) {
-    const timeMatch = schedule.time.match(/(\d{1,2}:\d{2} [AP]M) - (\d{1,2}:\d{2} [AP]M)/);
-    if (!timeMatch) return null;
-    const startMin = parseTime(timeMatch[1]);
-    const endMin = parseTime(timeMatch[2]);
-    if (isNaN(startMin) || isNaN(endMin)) return null;
-    return { ...schedule, startMin, endMin };
-}
-
-function timeRangesOverlap(start1, end1, start2, end2) {
-    return start1 < end2 && start2 < end1;
-}
-
-function formatDays(days) {
-    const dayNames = { U: 'Sun', M: 'Mon', T: 'Tue', W: 'Wed', R: 'Thu' };
-    return days.split('').sort((a, b) => (DAY_ORDER[a] ?? 99) - (DAY_ORDER[b] ?? 99))
-        .map(d => dayNames[d] || d).join(', ');
-}
-
-// Modal management helper to handle scroll locking
-function closeModal(id) {
-    document.getElementById(id).style.display = 'none';
-
-    // Only unlock scroll if NO other modals are open
-    const modals = ['modal', 'detailsModal', 'confirmModal'];
-    const anyOpen = modals.some(mId => {
-        const el = document.getElementById(mId);
-        return el && el.style.display === 'flex';
-    });
-
-    if (!anyOpen) {
-        document.body.classList.remove('modal-open');
-    }
-}
-
-// Show Confirmation Modal (Async)
-function showConfirmModal(title, message) {
-    return new Promise((resolve) => {
-        const modal = document.getElementById('confirmModal');
-        const titleEl = document.getElementById('confirmTitle');
-        const messageEl = document.getElementById('confirmMessage');
-        const yesBtn = document.getElementById('confirmYes');
-        const noBtn = document.getElementById('confirmNo');
-
-        titleEl.textContent = title;
-        messageEl.textContent = message;
-
-        modal.style.display = 'flex';
-        document.body.classList.add('modal-open');
-
-        const cleanup = () => {
-            closeModal('confirmModal');
-            yesBtn.onclick = null;
-            noBtn.onclick = null;
-        };
-
-        yesBtn.onclick = () => { cleanup(); resolve(true); };
-        noBtn.onclick = () => { cleanup(); resolve(false); };
-    });
-}
-
-// Calculate dynamic time range - Up to 2 AM (26)
-function calculateTimeRange(courses) {
-    let earliestMin = 24 * 60;
-    let latestMin = 0;
-    let hasItems = false;
-
-    courses.forEach(course => {
-        course.schedules.forEach(schedule => {
-            const parsed = parseScheduleTime(schedule);
-            if (!parsed) return;
-            hasItems = true;
-            earliestMin = Math.min(earliestMin, parsed.startMin);
-            latestMin = Math.max(latestMin, parsed.endMin);
-        });
-    });
-
-    if (typeof addedTasks !== 'undefined') {
-        addedTasks.forEach(task => {
-            const [h1, m1] = task.startTime.split(':').map(Number);
-            const [h2, m2] = task.endTime.split(':').map(Number);
-            const start = h1 * 60 + m1;
-            const end = h2 * 60 + m2;
-            hasItems = true;
-            earliestMin = Math.min(earliestMin, start);
-            latestMin = Math.max(latestMin, end);
-        });
-    }
-
-    if (!hasItems) return { startHour: 8, endHour: 17 };
-
-    const startHour = Math.max(7, Math.floor(earliestMin / 60) - TIME_PADDING_HOURS);
-    // Allow ending up to 02:00 AM (26 * 60)
-    const endHour = Math.min(26, Math.ceil(latestMin / 60) + TIME_PADDING_HOURS);
-
-    return { startHour, endHour };
-}
 
 // ==========================================
 // SCHEDULE PERSISTENCE
@@ -461,7 +328,8 @@ function saveScheduleState() {
 
     const state = {
         crns: crns,
-        isOnSchedule: isOnSchedule
+        isOnSchedule: isOnSchedule,
+        gender: document.getElementById('gender').value // Persist gender
     };
     localStorage.setItem('scheduleState', JSON.stringify(state));
 }
@@ -518,7 +386,7 @@ async function restoreScheduleState() {
                     const json = await res.json();
 
                     if (json.status === 'success' && json.data.length > 0) {
-                        addCourseToGrid(json.data[0]);
+                        addCourseToGrid(normalizeCourse(json.data[0]));
                     }
                 }
             } catch (err) {
@@ -535,6 +403,37 @@ async function restoreScheduleState() {
 // ==========================================
 // UTILITY FUNCTIONS
 // ==========================================
+
+// Fetch with timeout to prevent infinite loading when API is down
+// Helper to normalize course data from different API versions
+function normalizeCourse(raw) {
+    if (!raw) return raw;
+
+    // Check for nested course object (if applicable in some endpoints)
+    const rawCourse = raw.course || {};
+
+    // MAPPING STRATEGY (Based on API Response):
+    // raw.courseCode    -> "ACAC" (The Subject)
+    // raw.courseNumber  -> "112"  (The Number)
+
+    // Determine Subject
+    // Priority: raw.courseCode (New API), rawCourse.code (Nested), raw.subject (Old)
+    const subject = raw.courseCode || rawCourse.code || raw.subject;
+
+    // Determine Number (Internal 'courseCode')
+    // Priority: raw.courseNumber (New API), rawCourse.number (Nested), rawCourse.courseNumber
+    // CRITICAL: Do NOT use raw.courseCode here as it contains the Subject!
+    const number = raw.courseNumber || rawCourse.number || rawCourse.courseNumber || rawCourse.no;
+
+    const title = raw.title || rawCourse.title;
+
+    return {
+        ...raw,
+        subject: subject,
+        courseCode: number, // Intentionally mapped to 'courseCode' property for internal consistency
+        title: title
+    };
+}
 
 // Fetch with timeout to prevent infinite loading when API is down
 async function fetchWithTimeout(url, options = {}, timeout = 15000) {
@@ -564,6 +463,7 @@ async function fetchWithTimeout(url, options = {}, timeout = 15000) {
 
 function formatCourseCode(subject, code) {
     if (!subject || subject === '') return code;
+    if (!code || code === '') return subject; // Avoid trailing hyphen if code/number is missing
     return `${subject}-${code}`;
 }
 
@@ -588,10 +488,14 @@ function timeRangesOverlap(start1, end1, start2, end2) {
     return start1 < end2 && start2 < end1;
 }
 
+const FULL_DAY_MAP = { 'U': 'Sunday', 'M': 'Monday', 'T': 'Tuesday', 'W': 'Wednesday', 'R': 'Thursday', 'F': 'Friday', 'S': 'Saturday' };
+const SHORT_DAY_MAP = { 'U': 'Sun', 'M': 'Mon', 'T': 'Tue', 'W': 'Wed', 'R': 'Thu', 'F': 'Fri', 'S': 'Sat' };
+
 function formatDays(days) {
-    const dayNames = { U: 'Sun', M: 'Mon', T: 'Tue', W: 'Wed', R: 'Thu' };
+    if (!days) return '';
+    const dMap = appSettings.showFullDays ? FULL_DAY_MAP : SHORT_DAY_MAP;
     return days.split('').sort((a, b) => (DAY_ORDER[a] ?? 99) - (DAY_ORDER[b] ?? 99))
-        .map(d => dayNames[d] || d).join(', ');
+        .map(d => dMap[d] || d).join(', ');
 }
 
 // Modal management helper to handle scroll locking
@@ -666,7 +570,7 @@ function calculateTimeRange(courses) {
 
     if (!hasItems) return { startHour: 8, endHour: 17 };
 
-    const startHour = Math.max(7, Math.floor(earliestMin / 60) - TIME_PADDING_HOURS);
+    const startHour = Math.max(0, Math.floor(earliestMin / 60) - TIME_PADDING_HOURS);
     // Allow ending up to 02:00 AM (26 * 60)
     const endHour = Math.min(26, Math.ceil(latestMin / 60) + TIME_PADDING_HOURS);
 
@@ -677,8 +581,11 @@ function calculateTimeRange(courses) {
 // COURSE MANAGEMENT & UNDO
 // ==========================================
 
-function removeCourse(courseCode) {
-    const boxes = document.querySelectorAll(`.course-box[data-course-code="${courseCode}"]`);
+function removeCourse(courseCode, crn = null) {
+    // If CRN is provided, use it for specific deletion. Otherwise fall back to courseCode.
+    const selector = crn ? `.course-box[data-crn="${crn}"]` : `.course-box[data-course-code="${courseCode}"]`;
+    const boxes = document.querySelectorAll(selector);
+
     if (boxes.length === 0) return;
 
     // Save for undo
@@ -710,8 +617,12 @@ function removeCourse(courseCode) {
 async function restoreLastCourse() {
     const course = undoStack.pop();
     if (course) {
-        // Use handleCourseAddition to check for conflicts during undo
-        await handleCourseAddition(course, true);
+        if (course.isTask) {
+            addTask(course);
+        } else {
+            // Use handleCourseAddition to check for conflicts during undo
+            await handleCourseAddition(course, true);
+        }
 
         const toast = document.getElementById('toast');
         toast.classList.add('hidden');
@@ -719,6 +630,7 @@ async function restoreLastCourse() {
         updateSuggestedCourses();
     }
 }
+
 
 function showToast(msg) {
     const toast = document.getElementById('toast');
@@ -848,7 +760,6 @@ function createCourseBox(course, schedule) {
 }
 
 const RAMADAN_START_TIMES = {
-    // Morning times (left side of chart)
     '08:00': '10:00',
     '08:30': '10:20',
     '09:00': '10:40',
@@ -939,8 +850,12 @@ function getRamadanTime(timeStr) {
 
 function showCourseDetails(course) {
     const modal = document.getElementById('detailsModal');
+    const title = document.getElementById('detailsTitle');
     const content = document.getElementById('detailsContent');
     const removeBtn = document.getElementById('detailsRemoveBtn');
+
+    // Reset title (fix bug where it stuck as "Task Details")
+    title.textContent = 'Course Details';
 
     const codeStr = formatCourseCode(course.subject, course.courseCode);
     const isUniCourse = !!course.crn && !course.isCustom;
@@ -971,7 +886,7 @@ function showCourseDetails(course) {
     `;
 
     removeBtn.onclick = () => {
-        removeCourse(codeStr);
+        removeCourse(codeStr, course.crn); // Pass CRN for specific deletion
         closeModal('detailsModal');
     };
 
@@ -994,9 +909,9 @@ function displayCourses(courses) {
 
     if (courses.length === 0 && (typeof addedTasks === 'undefined' || addedTasks.length === 0)) {
         container.innerHTML = `<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 40px; text-align: center; color: var(--text-secondary); height: 300px; border: 2px dashed var(--border-color); border-radius: 12px; margin-top:20px;">
-                <img src="icons/time.png" style="width: 48px; opacity: 0.3; margin-bottom: 15px; filter: grayscale(1);">
+                <img src="icons/add.png" style="width: 48px; opacity: 0.3; margin-bottom: 15px; filter: grayscale(1);">
                 <p style="font-size: 1.1em; font-weight: 500;">No courses added yet</p>
-                <p style="font-size: 0.9em; margin-top:5px;">Use the search bar or "Add Task" to get started.</p>
+                <p style="font-size: 0.9em; margin-top:5px;">Add courses or tasks below to get started.</p>
             </div>`;
         generateMobileScheduleList([], container);
         updateTotalCredits();
@@ -1098,7 +1013,6 @@ function displayCourses(courses) {
                         <span class="course-code">${task.title}</span>
                     </div>
                     <div class="course-detail-inline loc">
-                        <img src="icons/location.png" class="detail-icon" alt="">
                         ${task.subtitle || '-'}
                     </div>
                 `;
@@ -1204,7 +1118,8 @@ function generateMobileScheduleList(courses, container) {
                 const removeBtn = card.querySelector('.remove-mobile-btn');
                 removeBtn.onclick = (e) => {
                     e.stopPropagation();
-                    if (confirm('Remove task?')) removeTask(task.id);
+                    // if (confirm('Remove task?')) 
+                    removeTask(task.id);
                 };
 
                 card.onclick = () => showTaskDetails(task);
@@ -1470,6 +1385,7 @@ async function showSectionChoices(code) {
         }
 
         const result = await response.json();
+        // console.log('API Response:', result); // Debug logging removed
         list.innerHTML = '';
 
         if (!result.data || result.data.length === 0) {
@@ -1477,7 +1393,10 @@ async function showSectionChoices(code) {
             return;
         }
 
-        result.data.forEach(course => {
+        result.data.forEach(rawData => {
+            // Normalize API data structure (support old and new formats)
+            const course = normalizeCourse(rawData);
+
             const card = document.createElement('div');
             card.className = 'section-card';
 
@@ -1513,14 +1432,21 @@ async function showSectionChoices(code) {
                     </div>
                 </div>
                 <div class="section-details">
-                    ${course.schedules.map(s => `
+                    ${course.schedules.map(s => {
+                const ramadanTime = appSettings.showRamadan ? getRamadanTime(s.time) : null;
+                return `
                         <div class="schedule-row">
                             <div class="detail-row"><span class="detail-label"><img src="icons/days.png" class="section-icon"> Days:</span><span class="detail-value">${formatDays(s.days)}</span></div>
-                            <div class="detail-row"><span class="detail-label"><img src="icons/time.png" class="section-icon"> Time:</span><span class="detail-value">${s.time}</span></div>
+                            <div class="detail-row"><span class="detail-label"><img src="icons/time.png" class="section-icon"> Time:</span><span class="detail-value">
+                                ${s.time}
+                                ${ramadanTime ? `<span class="ramadan-time-inline" style="margin-left:8px; color:var(--accent-primary); font-size:11px;">
+                                    <img src="icons/moon.png" style="width:12px; height:12px; margin-right:2px; vertical-align:text-bottom;"> ${ramadanTime}
+                                </span>` : ''}
+                            </span></div>
                             <div class="detail-row"><span class="detail-label"><img src="icons/location.png" class="section-icon"> Location:</span><span class="detail-value">${s.room || 'TBA'}</span></div>
                             <div class="detail-row"><span class="detail-label"><img src="icons/instructor.png" class="section-icon"> Instructor:</span><span class="detail-value">${s.instructor || course.primaryInstructor || 'TBA'}</span></div>
                         </div>
-                    `).join('')}
+                    `}).join('')}
                 </div>
             `;
 
@@ -1806,7 +1732,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (json.status === 'success' && json.data.length) {
                     const req = termSubjects[currentMajor][currentTerm];
-                    const filtered = json.data.filter(c => req.includes(formatCourseCode(c.subject, c.courseCode)));
+                    const filtered = json.data
+                        .map(normalizeCourse)
+                        .filter(c => req.includes(formatCourseCode(c.subject, c.courseCode)));
+
                     displayCourses(filtered);
                     updateSuggestedCourses();
                 } else {
@@ -1840,8 +1769,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('fetchBtn')?.addEventListener('click', performSearch);
     document.getElementById('courseInput')?.addEventListener('keypress', e => { if (e.key === 'Enter') performSearch(); });
 
-    document.getElementById('clearScheduleBtn')?.addEventListener('click', async () => {
-        const confirmed = await showConfirmModal('Reset Schedule', 'Clear entire schedule?');
+    document.getElementById('changeBlockBtn')?.addEventListener('click', async () => {
+        const confirmed = await showConfirmModal('Change Block', 'Clear schedule and choose a new block?');
 
         if (confirmed) {
             document.getElementById('timetableContainer').innerHTML = '';
@@ -1853,11 +1782,25 @@ document.addEventListener('DOMContentLoaded', () => {
             saveScheduleState(); // Clear saved schedule
             addedTasks = []; // Clear tasks
             saveTasks(); // Save empty tasks
-            refreshSchedule(); // Refresh to show empty state - wait, if main is blocked, we don't want refresh?
-            // Actually refreshSchedule calls displayCourses which shows schedule.
-            // If we cleared everything, we want to go back to FORM view.
-            // So we should NOT call refreshSchedule, just clear state.
+            // localStorage.removeItem('scheduleState'); // Consolidate logic if needed, but saveScheduleState() likely handles it if passed empty? 
+            // Actually existing code removed it manually. let's stick to existing pattern
             localStorage.removeItem('scheduleState');
+        }
+    });
+
+    document.getElementById('clearCoursesBtn')?.addEventListener('click', async () => {
+        const confirmed = await showConfirmModal('Clear Schedule', 'Remove all courses?');
+
+        if (confirmed) {
+            // function displayCourses([]) handles clearing logic and showing empty state
+            displayCourses([]);
+            addedTasks = [];
+            saveTasks();
+            saveScheduleState();
+            // Explicitly remove from storage to be sure
+            localStorage.removeItem('scheduleState');
+            updateTotalCredits();
+            updateSuggestedCourses();
         }
     });
 
@@ -1920,7 +1863,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const days = Array.from(document.querySelectorAll('input[name="customDay"]:checked')).map(c => c.value).join('');
         const start = document.getElementById('customStartTime').value;
         const end = document.getElementById('customEndTime').value;
-        const loc = document.getElementById('customLocation').value.trim();
+        const loc = document.getElementById('customRoom').value.trim();
         const err = document.getElementById('customErrorMsg');
 
         // Validation based on "all fields required"
@@ -2006,8 +1949,14 @@ document.addEventListener('DOMContentLoaded', () => {
             closeModal('detailsModal');
             closeModal('confirmModal');
             closeModal('customCourseModal');
-            document.getElementById('settingsModal')?.classList.remove('active');
-            document.getElementById('taskModal')?.classList.remove('active');
+
+            // Explicitly close settings and task modals using their display property logic
+            // or helper if available. Since closeModal takes ID and hides it:
+            closeModal('settingsModal');
+            closeModal('taskModal');
+
+            // Ensure body scroll is unlocked
+            document.body.classList.remove('modal-open');
         }
     });
 
@@ -2067,6 +2016,9 @@ function addTask(taskData) {
 }
 
 function removeTask(taskId) {
+    const taskToRemove = addedTasks.find(t => t.id === taskId);
+    if (taskToRemove) undoStack.push(taskToRemove);
+
     addedTasks = addedTasks.filter(t => t.id !== taskId);
     saveTasks();
     refreshSchedule();
@@ -2081,7 +2033,7 @@ function showTaskDetails(task) {
 
     title.textContent = 'Task Details';
 
-    const dayNames = task.days.split('').map(d => DAY_MAP[d] || d).join(', ');
+    const dayNames = formatDays(task.days);
 
     content.innerHTML = `
         <div class="details-row">
@@ -2100,29 +2052,52 @@ function showTaskDetails(task) {
             <span class="details-label">Time</span>
             <span class="details-value">${task.startTime} - ${task.endTime}</span>
         </div>
-        ${task.description ? `
         <div class="details-row">
             <span class="details-label">Description</span>
-            <span class="details-value">${task.description}</span>
+            <textarea id="taskDescEdit" class="full-width-textarea" style="width:100%; min-height:60px; padding:8px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-primary); font-family:inherit; resize:vertical;">${task.description || ''}</textarea>
         </div>
-        ` : ''}
     `;
+
+    // Auto-save description on blur
+    setTimeout(() => {
+        const descInput = document.getElementById('taskDescEdit');
+        if (descInput) {
+            descInput.addEventListener('blur', () => {
+                const newDesc = descInput.value.trim();
+                if (newDesc !== task.description) {
+                    task.description = newDesc;
+                    // Update in addedTasks array
+                    const idx = addedTasks.findIndex(t => t.id === task.id);
+                    if (idx !== -1) {
+                        addedTasks[idx].description = newDesc;
+                        saveTasks();
+                        refreshSchedule(); // Refresh to update view
+                    }
+                }
+            });
+        }
+    }, 0);
 
     removeBtn.textContent = 'Remove Task';
     removeBtn.onclick = () => {
         removeTask(task.id);
-        closeModal('detailsModal'); // Use the common closeModal function
+        closeModal('detailsModal');
     };
+
+    // Ensure close button works for tasks too (reuses detailsModal)
+    document.getElementById('closeDetailsBtn').onclick = () => closeModal('detailsModal');
 
     modal.style.display = 'flex'; // Use display:flex for modals
     document.body.classList.add('modal-open');
 }
 
+
 // ===== SETTINGS FUNCTIONALITY =====
 const defaultSettings = {
     showRamadan: false,
     showCrn: true,
-    showCredits: true
+    showCredits: true,
+    showFullDays: false
 };
 
 let appSettings = { ...defaultSettings };
@@ -2236,6 +2211,32 @@ function initTaskListeners() {
     const taskModal = document.getElementById('taskModal');
     const closeTaskBtn = document.getElementById('closeTaskModalBtn');
     const addTaskBtn = document.getElementById('addTaskBtn');
+
+    // Settings change listeners
+    document.getElementById('settingRamadan')?.addEventListener('change', (e) => {
+        appSettings.showRamadan = e.target.checked;
+        saveSettings();
+        refreshSchedule();
+    });
+
+    document.getElementById('settingFullDays')?.addEventListener('change', (e) => {
+        appSettings.showFullDays = e.target.checked;
+        saveSettings();
+        refreshSchedule();
+    });
+
+    // Settings change listeners
+    document.getElementById('settingRamadan')?.addEventListener('change', (e) => {
+        appSettings.showRamadan = e.target.checked;
+        saveSettings();
+        refreshSchedule();
+    });
+
+    document.getElementById('settingFullDays')?.addEventListener('change', (e) => {
+        appSettings.showFullDays = e.target.checked;
+        saveSettings();
+        refreshSchedule();
+    });
 
     if (openTaskBtn && taskModal) {
         openTaskBtn.onclick = (e) => {
