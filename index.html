@@ -104,7 +104,7 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="filter-row day-checkboxes">
+                        <div class="filter-row">
                             <label class="filter-label" style="width:100%">Days</label>
                             <div class="days-container">
                                 <label class="day-chip" data-day="U"><input type="checkbox" name="filterDay" value="U">
@@ -196,25 +196,34 @@
                     </div>
                 </div>
 
-                <div class="filter-row day-checkboxes">
+                <div class="filter-row">
                     <label class="filter-label" style="width:100%">Days</label>
-                    <div class="day-checkboxes">
-                        <label><input type="checkbox" name="customDay" value="U"> Sun</label>
-                        <label><input type="checkbox" name="customDay" value="M"> Mon</label>
-                        <label><input type="checkbox" name="customDay" value="T"> Tue</label>
-                        <label><input type="checkbox" name="customDay" value="W"> Wed</label>
-                        <label><input type="checkbox" name="customDay" value="R"> Thu</label>
+                    <div class="days-container">
+                        <label class="day-chip" data-day="U"><input type="checkbox" name="customDay" value="U">
+                            Sun</label>
+                        <label class="day-chip" data-day="M"><input type="checkbox" name="customDay" value="M">
+                            Mon</label>
+                        <label class="day-chip" data-day="T"><input type="checkbox" name="customDay" value="T">
+                            Tue</label>
+                        <label class="day-chip" data-day="W"><input type="checkbox" name="customDay" value="W">
+                            Wed</label>
+                        <label class="day-chip" data-day="R"><input type="checkbox" name="customDay" value="R">
+                            Thu</label>
                     </div>
                 </div>
 
                 <div class="filter-row-pair">
                     <div class="filter-row">
                         <label class="filter-label">Start Time</label>
-                        <input type="time" id="customStartTime">
+                        <select id="customStartTime" class="custom-select">
+                            <option value="">Select Time</option>
+                        </select>
                     </div>
                     <div class="filter-row">
                         <label class="filter-label">End Time</label>
-                        <input type="time" id="customEndTime">
+                        <select id="customEndTime" class="custom-select">
+                            <option value="">Select Time</option>
+                        </select>
                     </div>
                 </div>
 
@@ -277,25 +286,30 @@
                     </div>
                 </div>
 
-                <div class="filter-row day-checkboxes">
+                <div class="filter-row">
                     <label class="filter-label" style="width:100%">Days</label>
-                    <div class="day-checkboxes">
-                        <label><input type="checkbox" name="taskDay" value="U"> Sun</label>
-                        <label><input type="checkbox" name="taskDay" value="M"> Mon</label>
-                        <label><input type="checkbox" name="taskDay" value="T"> Tue</label>
-                        <label><input type="checkbox" name="taskDay" value="W"> Wed</label>
-                        <label><input type="checkbox" name="taskDay" value="R"> Thu</label>
+                    <div class="days-container">
+                        <label class="day-chip" data-day="U"><input type="checkbox" name="taskDay" value="U">
+                            Sun</label>
+                        <label class="day-chip" data-day="M"><input type="checkbox" name="taskDay" value="M">
+                            Mon</label>
+                        <label class="day-chip" data-day="T"><input type="checkbox" name="taskDay" value="T">
+                            Tue</label>
+                        <label class="day-chip" data-day="W"><input type="checkbox" name="taskDay" value="W">
+                            Wed</label>
+                        <label class="day-chip" data-day="R"><input type="checkbox" name="taskDay" value="R">
+                            Thu</label>
                     </div>
                 </div>
 
                 <div class="filter-row-pair">
                     <div class="filter-row">
                         <label class="filter-label">Start Time</label>
-                        <input type="time" id="taskStartTime">
+                        <input type="time" id="taskStartTime" class="custom-select" style="padding-right: 10px;">
                     </div>
                     <div class="filter-row">
                         <label class="filter-label">End Time</label>
-                        <input type="time" id="taskEndTime">
+                        <input type="time" id="taskEndTime" class="custom-select" style="padding-right: 10px;">
                     </div>
                 </div>
 

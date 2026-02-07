@@ -1288,8 +1288,19 @@ function generateMobileGridView(courses, container) {
 // ==========================================
 
 function populateTimeFilter() {
-    const select = document.getElementById('filterStartTime');
+    populateTimeSelect('filterStartTime');
+    populateTimeSelect('customStartTime');
+    populateTimeSelect('customEndTime');
+}
+
+function populateTimeSelect(elementId) {
+    const select = document.getElementById(elementId);
     if (!select) return;
+
+    // Clear existing options except the first one (placeholder)
+    while (select.options.length > 1) {
+        select.remove(1);
+    }
 
     for (let min = 8 * 60; min <= 22 * 60; min += 30) {
         const h = Math.floor(min / 60);

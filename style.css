@@ -865,6 +865,7 @@ section {
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
+        margin-top: 5px;
     }
 
     .filters-panel .day-chip {
@@ -995,6 +996,14 @@ section {
     font-size: 13px;
     color: var(--text-secondary);
     text-transform: none;
+}
+
+/* Days Container (Desktop & Base) */
+.days-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
 }
 
 #sectionList {
@@ -1173,7 +1182,9 @@ section {
 }
 
 .details-modal {
-    max-width: 450px;
+    max-width: 500px;
+    /* Standardize width for Add/Task modals */
+    width: 95%;
 }
 
 .details-body {
