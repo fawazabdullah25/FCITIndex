@@ -57,6 +57,15 @@
     --task-text: #6a1b9a;
     --section-header-bg: #e0f4ff;
 
+    /* In light mode, swap dark-bg favicon for light version */
+    .default-logo {
+        display: none !important;
+    }
+
+    .light-logo {
+        display: block !important;
+    }
+
     --success: #00ff88;
     --success-bg: #d4f5e0;
     --warning: #ffaa00;
@@ -209,6 +218,10 @@ body.form-active {
 }
 
 .mobile-logo {
+    display: none;
+}
+
+.light-logo {
     display: none;
 }
 
@@ -615,12 +628,17 @@ section {
     align-items: center;
     font-size: 9px;
     color: var(--text-secondary);
-    white-space: normal;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     line-height: 1.2;
+    max-width: 100%;
 }
 
 .course-detail-inline.loc {
     color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .detail-icon {
@@ -2573,18 +2591,20 @@ select,
 }
 
 .form-logo-block img {
-    width: 100px;
-    height: 100px;
-    margin-bottom: 12px;
+    width: 200px;
+    height: 200px;
+    filter: drop-shadow(0 0 20px var(--accent-glow)) drop-shadow(0 0 40px var(--accent-glow));
 }
 
-.form-logo-block h1 {
-    font-size: 1.3rem;
+.form-title {
+    grid-column: 1 / -1;
+    text-align: center;
+    font-size: 1.5rem;
     color: var(--accent-primary);
     letter-spacing: 2px;
     text-transform: uppercase;
     font-weight: 700;
-    margin: 0;
+    margin: 0 0 5px 0;
 }
 
 /* In-modal error message */

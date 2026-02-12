@@ -766,10 +766,10 @@ function showCourseDetails(course) {
     const content = document.getElementById('detailsContent');
     const removeBtn = document.getElementById('detailsRemoveBtn');
 
-    // Reset title (fix bug where it stuck as "Task Details")
-    title.textContent = 'Course Details';
-
     const codeStr = formatCourseCode(course.subject, course.courseCode);
+
+    // Show course code as the modal title
+    title.textContent = codeStr;
     const isUniCourse = !!course.crn && !course.isCustom;
 
     const schedulesHtml = course.schedules.map((s, index) => {
@@ -1987,7 +1987,7 @@ function showTaskDetails(task) {
     const content = document.getElementById('detailsContent');
     const removeBtn = document.getElementById('detailsRemoveBtn');
 
-    title.textContent = 'Task Details';
+    title.textContent = task.title;
 
     const dayNames = formatDays(task.days);
 
