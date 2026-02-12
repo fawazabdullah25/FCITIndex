@@ -10,10 +10,18 @@
 </head>
 
 <body>
+    <div id="splash-screen">
+        <img src="icons/logo.png" alt="FCITIndex Logo" class="splash-logo">
+    </div>
+
     <header class="site-header">
-        <button id="logoBtn" class="logo-section">
-            <span class="logo">FCITIndex</span>
-            <span class="logo-tagline">Build Your FCIT Schedule</span>
+        <button id="logoBtn" class="logo-section" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
+            <img src="icons/favicon.png" alt="FCITIndex" class="header-logo default-logo">
+            <img src="icons/logo.png" alt="FCITIndex" class="header-logo mobile-logo">
+            <div class="logo-text-container">
+                <span class="logo">FCITINDEX</span>
+                <span class="logo-tagline">Build Your Own Schedule</span>
+            </div>
         </button>
 
         <div class="header-actions">
@@ -227,6 +235,7 @@
                     </div>
                 </div>
 
+                <p id="customErrorMsg" class="error-msg"></p>
                 <button id="addCustomEntryBtn"
                     style="width: 100%; padding: 12px; background: var(--accent-primary); color: var(--bg-primary); border: none; border-radius: 8px; font-weight: 600; cursor: pointer; text-transform: uppercase; margin-top: 15px;">ADD
                     COURSE</button>
@@ -320,6 +329,7 @@
                     </div>
                 </div>
 
+                <p id="taskErrorMsg" class="error-msg"></p>
                 <button id="addTaskBtn"
                     style="width: 100%; padding: 12px; background: var(--accent-primary); color: var(--bg-primary); border: none; border-radius: 8px; font-weight: 600; cursor: pointer; text-transform: uppercase; margin-top: 15px;">ADD
                     TASK</button>
@@ -385,6 +395,10 @@
     </div>
 
 
+    <div class="form-logo-block">
+        <img src="icons/logo.png" alt="FCIT Index">
+        <h1>Build Your FCIT Schedule</h1>
+    </div>
     <main>
         <form id="blockForm">
             <div class="field">

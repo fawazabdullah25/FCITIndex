@@ -310,96 +310,6 @@ async function restoreScheduleState() {
     }
 }
 
-
-
-// ==========================================
-// SCHEDULE PERSISTENCE
-// ==========================================
-
-function saveScheduleState() {
-    const crns = [];
-    document.querySelectorAll('.course-box').forEach(box => {
-        if (box.courseData && !crns.includes(box.courseData.crn)) {
-            crns.push(box.courseData.crn);
-        }
-    });
-
-    const isOnSchedule = document.querySelector('section').style.display === 'block';
-
-    const state = {
-        crns: crns,
-        isOnSchedule: isOnSchedule,
-        gender: document.getElementById('gender').value // Persist gender
-    };
-    localStorage.setItem('scheduleState', JSON.stringify(state));
-}
-
-// Custom Course Persistence
-function getCustomCourses() {
-    try {
-        return JSON.parse(localStorage.getItem('customCourses') || '[]');
-    } catch { return []; }
-}
-
-function saveCustomCourse(course) {
-    const current = getCustomCourses();
-    current.push(course);
-    localStorage.setItem('customCourses', JSON.stringify(current));
-}
-
-function removeCustomCourse(code) {
-    const current = getCustomCourses();
-    const filtered = current.filter(c => c.courseCode !== code);
-    localStorage.setItem('customCourses', JSON.stringify(filtered));
-}
-
-function getCustomCourseByCrn(crn) {
-    const current = getCustomCourses();
-    return current.find(c => c.crn === crn);
-}
-
-async function restoreScheduleState() {
-    const saved = localStorage.getItem('scheduleState');
-    if (!saved) return;
-
-    try {
-        const state = JSON.parse(saved);
-
-        if (!state.isOnSchedule || state.crns.length === 0) return;
-
-        const gender = document.getElementById('gender').value;
-
-        // Show schedule view
-        displayCourses([]);
-
-        // Fetch each course by CRN and add to grid
-        for (const crn of state.crns) {
-            try {
-                // Check if it's a saved custom course first (by CRN)
-                const custom = getCustomCourseByCrn(crn);
-                if (custom) {
-                    addCourseToGrid(custom);
-                } else {
-                    // Otherwise try API
-                    const url = `https://api.kauindex.com/search?termCode=202602&crn=${crn}&gender=${gender}&limit=1`;
-                    const res = await fetch(url);
-                    const json = await res.json();
-
-                    if (json.status === 'success' && json.data.length > 0) {
-                        addCourseToGrid(normalizeCourse(json.data[0]));
-                    }
-                }
-            } catch (err) {
-                console.warn(`Could not restore course CRN ${crn}`);
-            }
-        }
-
-        updateSuggestedCourses();
-    } catch (e) {
-        console.warn('Could not restore schedule state');
-    }
-}
-
 // ==========================================
 // UTILITY FUNCTIONS
 // ==========================================
@@ -684,6 +594,7 @@ function findConflict(newCourse) {
 }
 
 // Recursive function to handle adding a course, replacing conflicts if necessary
+// Returns true if course was successfully added, false if user cancelled
 async function handleCourseAddition(course, isUndo = false) {
     const conflict = findConflict(course);
 
@@ -694,7 +605,7 @@ async function handleCourseAddition(course, isUndo = false) {
             closeModal('modal');
         }
         updateSuggestedCourses();
-        return;
+        return true;
     }
 
     // Prompt user
@@ -711,13 +622,13 @@ async function handleCourseAddition(course, isUndo = false) {
     }
 
     const confirm = await showConfirmModal(title, msg);
-    if (!confirm) return;
+    if (!confirm) return false;
 
     // Remove conflicting course
     removeCourse(conflict.code);
 
     // Recursively try adding again
-    await handleCourseAddition(course, isUndo);
+    return await handleCourseAddition(course, isUndo);
 }
 
 // ==========================================
@@ -730,6 +641,7 @@ function createCourseBox(course, schedule) {
     const codeStr = formatCourseCode(course.subject, course.courseCode);
 
     box.dataset.courseCode = codeStr;
+    box.dataset.crn = course.crn;
     box.dataset.startMin = schedule.startMin;
     box.dataset.endMin = schedule.endMin;
     box.dataset.days = schedule.days;
@@ -906,6 +818,9 @@ function displayCourses(courses) {
     document.getElementById('schedule').style.display = 'block'; // Show schedule container
     document.querySelector('section').style.display = 'block';   // Show add-courses section
     document.querySelector('main').style.display = 'none';       // Hide main form
+    const formLogo = document.querySelector('.form-logo-block');
+    if (formLogo) formLogo.style.display = 'none';               // Hide form logo
+    document.body.classList.remove('form-active');                // Show header
 
     if (courses.length === 0 && (typeof addedTasks === 'undefined' || addedTasks.length === 0)) {
         container.innerHTML = `<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 40px; text-align: center; color: var(--text-secondary); height: 300px; border: 2px dashed var(--border-color); border-radius: 12px; margin-top:20px;">
@@ -1592,6 +1507,22 @@ function addCourseToGrid(course) {
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Start on form page - hide header
+    document.body.classList.add('form-active');
+
+    // Splash Screen Logic
+    const splash = document.getElementById('splash-screen');
+    if (splash) {
+        document.body.style.overflow = 'hidden'; // Prevent scrolling
+        setTimeout(() => {
+            splash.classList.add('fade-out');
+            setTimeout(() => {
+                splash.style.display = 'none';
+                document.body.style.overflow = ''; // Restore scrolling
+            }, 500); // Wait for transition
+        }, 1500); // 1.5s splash duration
+    }
+
     populateTimeFilter();
     restoreFormState();
 
@@ -1789,6 +1720,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('schedule').style.display = 'none'; // Hide schedule container
             document.querySelector('section').style.display = 'none';
             document.querySelector('main').style.display = 'block';
+            const formLogo1 = document.querySelector('.form-logo-block');
+            if (formLogo1) formLogo1.style.display = '';
+            document.body.classList.add('form-active'); // Hide header on form page
             // Keep form values - don't reset
             saveScheduleState(); // Clear saved schedule
             addedTasks = []; // Clear tasks
@@ -1800,15 +1734,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('clearCoursesBtn')?.addEventListener('click', async () => {
-        const confirmed = await showConfirmModal('Clear Schedule', 'Remove all courses?');
+        const confirmed = await showConfirmModal('Clear Schedule', 'Clear all courses and tasks from your schedule?');
 
         if (confirmed) {
-            // function displayCourses([]) handles clearing logic and showing empty state
-            displayCourses([]);
+            // Clear tasks BEFORE displayCourses so empty state check works
             addedTasks = [];
             saveTasks();
+            displayCourses([]);
             saveScheduleState();
-            // Explicitly remove from storage to be sure
             localStorage.removeItem('scheduleState');
             updateTotalCredits();
             updateSuggestedCourses();
@@ -1825,6 +1758,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('schedule').style.display = 'none'; // Hide schedule container
             document.querySelector('section').style.display = 'none';
             document.querySelector('main').style.display = 'block';
+            const formLogo2 = document.querySelector('.form-logo-block');
+            if (formLogo2) formLogo2.style.display = '';
+            document.body.classList.add('form-active'); // Hide header on form page
 
             localStorage.removeItem('scheduleState');
             addedTasks = [];
@@ -1863,7 +1799,7 @@ document.addEventListener('DOMContentLoaded', () => {
         closeModal('customCourseModal');
     });
 
-    document.getElementById('addCustomEntryBtn')?.addEventListener('click', () => {
+    document.getElementById('addCustomEntryBtn')?.addEventListener('click', async () => {
         // Collect Full Fields
         const code = document.getElementById('customCode').value.trim().toUpperCase();
         const title = document.getElementById('customTitle').value.trim();
@@ -1936,21 +1872,30 @@ document.addEventListener('DOMContentLoaded', () => {
             }]
         };
 
-        saveCustomCourse(course);
-        handleCourseAddition(course);
-        closeModal('customCourseModal');
+        const success = await handleCourseAddition(course);
 
-        // Reset inputs
-        document.getElementById('customCode').value = '';
-        document.getElementById('customTitle').value = '';
-        document.getElementById('customSection').value = '';
-        document.getElementById('customCrn').value = '';
-        document.getElementById('customCredits').value = '';
-        document.getElementById('customInstructor').value = '';
-        document.querySelectorAll('input[name="customDay"]').forEach(c => c.checked = false);
-        document.getElementById('customStartTime').value = '';
-        document.getElementById('customEndTime').value = '';
-        document.getElementById('customLocation').value = '';
+        if (success) {
+            saveCustomCourse(course);
+            closeModal('customCourseModal');
+
+            // Reset inputs
+            document.getElementById('customCode').value = '';
+            document.getElementById('customTitle').value = '';
+            document.getElementById('customSection').value = '';
+            document.getElementById('customCrn').value = '';
+            document.getElementById('customCredits').value = '';
+            document.getElementById('customInstructor').value = '';
+            document.querySelectorAll('input[name="customDay"]').forEach(c => c.checked = false);
+            document.getElementById('customStartTime').value = '';
+            document.getElementById('customEndTime').value = '';
+            document.getElementById('customRoom').value = '';
+            const customErr = document.getElementById('customErrorMsg');
+            if (customErr) customErr.style.display = 'none';
+        } else {
+            // User declined conflict — re-open the modal so user can edit
+            document.getElementById('customCourseModal').style.display = 'flex';
+            document.body.classList.add('modal-open');
+        }
     });
 
     // ESC key closes modals (added custom)
@@ -2236,19 +2181,6 @@ function initTaskListeners() {
         refreshSchedule();
     });
 
-    // Settings change listeners
-    document.getElementById('settingRamadan')?.addEventListener('change', (e) => {
-        appSettings.showRamadan = e.target.checked;
-        saveSettings();
-        refreshSchedule();
-    });
-
-    document.getElementById('settingFullDays')?.addEventListener('change', (e) => {
-        appSettings.showFullDays = e.target.checked;
-        saveSettings();
-        refreshSchedule();
-    });
-
     if (openTaskBtn && taskModal) {
         openTaskBtn.onclick = (e) => {
             e.stopPropagation();
@@ -2260,7 +2192,9 @@ function initTaskListeners() {
     if (closeTaskBtn && taskModal) {
         closeTaskBtn.onclick = () => {
             taskModal.style.display = 'none';
-            document.body.classList.remove('modal-open'); // Unlock scroll
+            document.body.classList.remove('modal-open');
+            const taskErr = document.getElementById('taskErrorMsg');
+            if (taskErr) taskErr.style.display = 'none';
         };
     }
 
@@ -2268,7 +2202,9 @@ function initTaskListeners() {
         taskModal.onclick = (e) => {
             if (e.target === taskModal) {
                 taskModal.style.display = 'none';
-                document.body.classList.remove('modal-open'); // Unlock scroll
+                document.body.classList.remove('modal-open');
+                const taskErr = document.getElementById('taskErrorMsg');
+                if (taskErr) taskErr.style.display = 'none';
             }
         };
     }
@@ -2286,9 +2222,65 @@ function initTaskListeners() {
                 selectedDays.push(cb.value);
             });
 
+            const taskErr = document.getElementById('taskErrorMsg');
+
             if (!title || !startTime || !endTime || selectedDays.length === 0) {
-                showToast('Please fill in required fields');
+                if (taskErr) {
+                    taskErr.textContent = 'Please fill in all required fields (title, days, start & end time).';
+                    taskErr.style.display = 'block';
+                }
                 return;
+            }
+
+            if (startTime >= endTime) {
+                if (taskErr) {
+                    taskErr.textContent = 'Start time must be before end time.';
+                    taskErr.style.display = 'block';
+                }
+                return;
+            }
+
+            if (taskErr) taskErr.style.display = 'none';
+
+            // Check for time conflicts with existing courses and tasks
+            const taskDays = selectedDays;
+            const [tStartH, tStartM] = startTime.split(':').map(Number);
+            const [tEndH, tEndM] = endTime.split(':').map(Number);
+            const taskStartMin = tStartH * 60 + tStartM;
+            const taskEndMin = tEndH * 60 + tEndM;
+
+            // Check against courses on the grid
+            const existingBoxes = document.querySelectorAll('.course-box');
+            for (const box of existingBoxes) {
+                const boxDays = (box.dataset.days || '').split('');
+                const boxStart = parseInt(box.dataset.startMin);
+                const boxEnd = parseInt(box.dataset.endMin);
+                const dayOverlap = taskDays.some(d => boxDays.includes(d));
+                if (dayOverlap && timeRangesOverlap(taskStartMin, taskEndMin, boxStart, boxEnd)) {
+                    const conflictName = box.dataset.courseCode || 'a course';
+                    if (taskErr) {
+                        taskErr.textContent = `Time conflict with ${conflictName}.`;
+                        taskErr.style.display = 'block';
+                    }
+                    return;
+                }
+            }
+
+            // Check against existing tasks
+            for (const t of addedTasks) {
+                const tDays = t.days.split('');
+                const [eStartH, eStartM] = t.startTime.split(':').map(Number);
+                const [eEndH, eEndM] = t.endTime.split(':').map(Number);
+                const eStartMin = eStartH * 60 + eStartM;
+                const eEndMin = eEndH * 60 + eEndM;
+                const dayOverlap = taskDays.some(d => tDays.includes(d));
+                if (dayOverlap && timeRangesOverlap(taskStartMin, taskEndMin, eStartMin, eEndMin)) {
+                    if (taskErr) {
+                        taskErr.textContent = `Time conflict with task "${t.title}".`;
+                        taskErr.style.display = 'block';
+                    }
+                    return;
+                }
             }
 
             addTask({
