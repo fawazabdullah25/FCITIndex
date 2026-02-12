@@ -805,7 +805,8 @@ section {
     /* Wider for sidebar */
     width: 90%;
     max-height: 90vh;
-    /* Increase height */
+    max-height: 90dvh;
+    /* dvh accounts for mobile browser chrome */
     overflow-y: auto;
     /* Allow scrolling inside modal */
     overflow-x: hidden;
