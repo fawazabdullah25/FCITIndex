@@ -16,13 +16,20 @@
 ### 🔍 Course Search & Addition
 - **Suggested Courses**: Quick-add buttons for commonly taken electives for your term
 - **Custom Search**: Search for any course by code (e.g., `FLAN-201`, `ARAB-101`)
+- **Custom Courses**: Add your own courses manually with full details (days, time, room, instructor)
 - Real-time section availability with instructor names, times, and locations
 
 ### 📊 Interactive Timetable
-- Visual weekly schedule grid (Sunday - Thursday)
+- Visual weekly schedule grid (Sunday – Thursday)
 - Color-coded course blocks with subject badges
 - Click any course to view detailed information
 - Dynamic time range adjustment based on your courses
+- **Compressed Gap View**: Toggle to collapse large gaps (> 1 hour) with per-day break duration labels
+
+### ✅ Tasks
+- Add custom tasks to your schedule alongside courses
+- Tasks display on the timetable grid with their own color
+- Edit task descriptions, remove, and undo
 
 ### 🔧 Advanced Filtering
 - Filter course sections by:
@@ -33,6 +40,12 @@
   - **Days** (Sun, Mon, Tue, Wed, Thu)
 - **Hide Conflicting Sections**: Automatically hide sections that conflict with your current schedule
 
+### 🌙 Ramadan Mode
+- Toggle Ramadan times in settings to reposition courses to their official Ramadan schedule
+- Course boxes on the grid shift to their Ramadan time slots
+- All course detail views update to show Ramadan times
+- Conflict detection warns you before enabling if custom courses or tasks overlap with Ramadan positions
+
 ### ⚡ Smart Features
 - **Conflict Detection**: Warns you before adding overlapping courses
 - **Undo Functionality**: Quickly restore removed courses with the undo button
@@ -41,9 +54,14 @@
 
 ### 🎨 UI/UX
 - **Dark/Light Theme Toggle**: Switch between themes with one click
-- **Responsive Design**: Works on desktop, tablet, and mobile devices
-- **Modern Aesthetics**: Glassmorphism, smooth animations, and a sleek interface
-- **Accessibility**: Proper label elements and keyboard navigation support
+- **Responsive Design**: Desktop grid view, mobile list view, and mobile grid view with toggle
+- **Modern Aesthetics**: Glassmorphism, smooth animations, and a sleek cyberpunk-inspired interface
+- **Accessibility**: ARIA labels, skip-to-content link, keyboard navigation, `prefers-reduced-motion` support
+
+### ⚙️ Settings
+- Toggle Ramadan time mode
+- Show/hide CRN and credit hours on mobile cards
+- Preferences persisted across sessions
 
 ---
 
@@ -63,10 +81,10 @@
 ## 📁 Project Structure
 
 ```
-FcitIndex/
+FCITIndex/
 ├── index.html      # Main HTML structure
-├── style.css       # All styles (1400+ lines)
-├── script.js       # Application logic (1200+ lines)
+├── style.css       # All styles (2700+ lines)
+├── script.js       # Application logic (2300+ lines)
 ├── icons/          # UI icons (sun, moon, search, etc.)
 └── README.md       # This file
 ```
@@ -85,6 +103,8 @@ FcitIndex/
 3. Click **"Load Block Schedule"** to view your assigned courses
 4. Use **suggested course buttons** or **search** to add more courses
 5. Click on courses in your schedule to view details or remove them
+6. Enable **Ramadan mode** in settings to reposition courses to their Ramadan schedule
+7. Use **"Compress Gaps"** to collapse long breaks in your timetable
 
 ---
 
@@ -92,18 +112,18 @@ FcitIndex/
 
 | Major | Full Name | Years |
 |-------|-----------|-------|
-| **CS** | Computer Science | 2-5 |
-| **IT** | Information Technology | 2-5 |
-| **IS** | Information Systems | 2-5 |
+| **CS** | Computer Science | 2–5 |
+| **IT** | Information Technology | 2–5 |
+| **IS** | Information Systems | 2–5 |
 
 ---
 
 ## 📱 Responsive Design
 
 FCITIndex is fully responsive and works on:
-- 🖥️ **Desktop** (1200px+) — Full sidebar filters
-- 💻 **Laptop** (768px - 1200px) — Adapted layout
-- 📱 **Mobile** (< 768px) — Compact filters, stacked layout
+- 🖥️ **Desktop** (1200px+) — Full sidebar filters and timetable grid
+- 💻 **Laptop** (768px – 1200px) — Adapted layout
+- 📱 **Mobile** (< 768px) — List view with grid toggle, compact filters
 
 ---
 
@@ -142,4 +162,4 @@ Developed with ❤️ for FCIT students.
 ## 🙏 Acknowledgments
 
 - King Abdulaziz University — Faculty of Computing and Information Technology
-- KAU Index API for providing course data
+- KAUIndex API for providing course data

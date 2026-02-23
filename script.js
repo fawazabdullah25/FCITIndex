@@ -128,12 +128,14 @@ const alwaysSuggestedFemale = {
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
 const DAY_MAP = { U: 'Sunday', M: 'Monday', T: 'Tuesday', W: 'Wednesday', R: 'Thursday' };
 const DAY_ORDER = { U: 0, M: 1, T: 2, W: 3, R: 4 };
-const PIXELS_PER_HOUR = 80;
+const PIXELS_PER_HOUR = 100;
 const TIME_PADDING_HOURS = 1;
 
 let currentMajor = null;
 let currentTerm = null;
 let currentTimeRange = { startHour: 8, endHour: 17 };
+let currentGapData = null; // set when compress-gaps is active
+let compressGapsEnabled = localStorage.getItem('fcitindex-compress-gaps') === 'true';
 let undoStack = [];
 let undoTimeout = null;
 
@@ -425,7 +427,7 @@ function closeModal(id) {
 }
 
 // Show Confirmation Modal (Async)
-function showConfirmModal(title, message) {
+function showConfirmModal(title, message, isDanger = true) {
     return new Promise((resolve) => {
         const modal = document.getElementById('confirmModal');
         const titleEl = document.getElementById('confirmTitle');
@@ -436,17 +438,63 @@ function showConfirmModal(title, message) {
         titleEl.textContent = title;
         messageEl.textContent = message;
 
+        // Show both buttons for confirm dialogs
+        noBtn.style.display = '';
+        yesBtn.textContent = 'Yes';
+
+        if (isDanger) {
+            yesBtn.classList.add('btn-danger');
+        } else {
+            yesBtn.classList.remove('btn-danger');
+        }
+
         modal.style.display = 'flex';
         document.body.classList.add('modal-open');
 
         const cleanup = () => {
             closeModal('confirmModal');
+            yesBtn.classList.remove('btn-danger');
             yesBtn.onclick = null;
             noBtn.onclick = null;
         };
 
         yesBtn.onclick = () => { cleanup(); resolve(true); };
         noBtn.onclick = () => { cleanup(); resolve(false); };
+    });
+}
+
+/**
+ * Alert-only modal (single OK button, no cancel). Shows on top of other modals.
+ */
+function showAlertModal(title, message) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('confirmModal');
+        const titleEl = document.getElementById('confirmTitle');
+        const messageEl = document.getElementById('confirmMessage');
+        const yesBtn = document.getElementById('confirmYes');
+        const noBtn = document.getElementById('confirmNo');
+
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+
+        // Single OK button (neutral accent color)
+        noBtn.style.display = 'none';
+        yesBtn.textContent = 'OK';
+        yesBtn.classList.remove('btn-danger');
+
+        // Ensure it appears above the settings modal
+        modal.style.zIndex = '3000';
+        modal.style.display = 'flex';
+        document.body.classList.add('modal-open');
+
+        const cleanup = () => {
+            modal.style.zIndex = '';
+            closeModal('confirmModal');
+            yesBtn.onclick = null;
+            noBtn.onclick = null;
+        };
+
+        yesBtn.onclick = () => { cleanup(); resolve(); };
     });
 }
 
@@ -461,6 +509,17 @@ function calculateTimeRange(courses) {
             const parsed = parseScheduleTime(schedule);
             if (!parsed) return;
             hasItems = true;
+
+            // Use Ramadan times for grid bounds when enabled (non-custom courses only)
+            if (appSettings.showRamadan && !course.isCustom) {
+                const ramadan = getRamadanParsedTime(schedule.time);
+                if (ramadan) {
+                    earliestMin = Math.min(earliestMin, ramadan.startMin);
+                    latestMin = Math.max(latestMin, ramadan.endMin);
+                    return;
+                }
+            }
+
             earliestMin = Math.min(earliestMin, parsed.startMin);
             latestMin = Math.max(latestMin, parsed.endMin);
         });
@@ -481,8 +540,8 @@ function calculateTimeRange(courses) {
     if (!hasItems) return { startHour: 8, endHour: 17 };
 
     const startHour = Math.max(0, Math.floor(earliestMin / 60) - TIME_PADDING_HOURS);
-    // Allow ending up to 02:00 AM (26 * 60)
-    const endHour = Math.min(26, Math.ceil(latestMin / 60) + TIME_PADDING_HOURS);
+    // Allow ending up to 04:00 AM (28 * 60) for late Ramadan slots
+    const endHour = Math.min(28, Math.ceil(latestMin / 60) + TIME_PADDING_HOURS);
 
     return { startHour, endHour };
 }
@@ -490,6 +549,182 @@ function calculateTimeRange(courses) {
 // ==========================================
 // COURSE MANAGEMENT & UNDO
 // ==========================================
+
+// ==========================================
+// COMPRESSED GAP VIEW
+// ==========================================
+
+const GAP_INDICATOR_MINUTES = 20; // visual height of gap indicator in "virtual minutes"
+
+/**
+ * Finds shared gaps (>1 hr) across all active days.
+ * Returns { gaps: [{gapStartMin, gapEndMin, perDayBreaks: {day: breakMinutes}}], totalCompressedMinutes }
+ * perDayBreaks: for each day, the actual break duration in that day's gap region
+ */
+function computeCompressedGaps(courses, timeRange) {
+    const { startHour, endHour } = timeRange;
+    const gridStartMin = startHour * 60;
+    const gridEndMin = endHour * 60;
+
+    // Collect occupied intervals per day
+    const dayIntervals = {}; // day => [{start, end}]
+    DAYS.forEach(day => dayIntervals[day] = []);
+
+    courses.forEach(course => {
+        course.schedules.forEach(schedule => {
+            const parsed = parseScheduleTime(schedule);
+            if (!parsed) return;
+
+            let sMin = parsed.startMin, eMin = parsed.endMin;
+            if (appSettings.showRamadan && !course.isCustom) {
+                const ramadan = getRamadanParsedTime(schedule.time);
+                if (ramadan) { sMin = ramadan.startMin; eMin = ramadan.endMin; }
+            }
+
+            parsed.days.split('').forEach(d => {
+                const dayName = DAY_MAP[d];
+                if (dayIntervals[dayName]) dayIntervals[dayName].push({ start: sMin, end: eMin });
+            });
+        });
+    });
+
+    if (typeof addedTasks !== 'undefined') {
+        addedTasks.forEach(task => {
+            const [h1, m1] = task.startTime.split(':').map(Number);
+            const [h2, m2] = task.endTime.split(':').map(Number);
+            task.days.split('').forEach(d => {
+                const dayName = DAY_MAP[d];
+                if (dayIntervals[dayName]) dayIntervals[dayName].push({ start: h1 * 60 + m1, end: h2 * 60 + m2 });
+            });
+        });
+    }
+
+    // Find active days (days with at least one item)
+    const activeDays = DAYS.filter(d => dayIntervals[d].length > 0);
+    if (activeDays.length === 0) return { gaps: [], totalCompressedMinutes: gridEndMin - gridStartMin };
+
+    // Find global bounds for active items
+    let globalMin = Infinity;
+    let globalMax = -Infinity;
+    activeDays.forEach(day => {
+        dayIntervals[day].forEach(interval => {
+            globalMin = Math.min(globalMin, interval.start);
+            globalMax = Math.max(globalMax, interval.end);
+        });
+    });
+
+    // Per-day: sort intervals, find ALL gaps > 60 min
+    function findDayGaps(intervals) {
+        if (intervals.length === 0) return [{ start: gridStartMin, end: gridEndMin }]; // entire day is free
+        const sorted = [...intervals].sort((a, b) => a.start - b.start);
+        const gaps = [];
+        // Gap before first item
+        if (sorted[0].start - gridStartMin > 60) {
+            gaps.push({ start: gridStartMin, end: sorted[0].start });
+        }
+        // Gaps between items
+        let lastEnd = sorted[0].end;
+        for (let i = 1; i < sorted.length; i++) {
+            if (sorted[i].start - lastEnd > 60) {
+                gaps.push({ start: lastEnd, end: sorted[i].start });
+            }
+            lastEnd = Math.max(lastEnd, sorted[i].end);
+        }
+        // Gap after last item
+        if (gridEndMin - lastEnd > 60) {
+            gaps.push({ start: lastEnd, end: gridEndMin });
+        }
+        return gaps;
+    }
+
+    const perDayGaps = {};
+    activeDays.forEach(day => perDayGaps[day] = findDayGaps(dayIntervals[day]));
+
+    // Intersect gaps across all active days
+    // Start with first active day's gaps, then intersect with each subsequent day
+    let sharedGaps = perDayGaps[activeDays[0]].map(g => ({ start: g.start, end: g.end }));
+
+    for (let i = 1; i < activeDays.length; i++) {
+        const dayGaps = perDayGaps[activeDays[i]];
+        const newShared = [];
+        sharedGaps.forEach(sg => {
+            dayGaps.forEach(dg => {
+                const overlapStart = Math.max(sg.start, dg.start);
+                const overlapEnd = Math.min(sg.end, dg.end);
+                if (overlapEnd - overlapStart > 60) {
+                    newShared.push({ start: overlapStart, end: overlapEnd });
+                }
+            });
+        });
+        sharedGaps = newShared;
+        if (sharedGaps.length === 0) break;
+    }
+
+    // Filter shared gaps to ONLY keep intersections within the global bounding box
+    // so we "don't compress gaps at the top and bottom of the grid"
+    const boundedSharedGaps = [];
+    sharedGaps.forEach(sg => {
+        const overlapStart = Math.max(sg.start, globalMin);
+        const overlapEnd = Math.min(sg.end, globalMax);
+        if (overlapEnd - overlapStart > 60) {
+            boundedSharedGaps.push({ start: overlapStart, end: overlapEnd });
+        }
+    });
+
+    sharedGaps = boundedSharedGaps;
+
+    // Convert to final format with per-day break durations
+    const gaps = sharedGaps.map(sg => {
+        const perDayBreaks = {};
+        activeDays.forEach(day => {
+            // Find the actual break in this day that fully covers the shared gap
+            const dayGaps = perDayGaps[day];
+            const covering = dayGaps.find(dg => dg.start <= sg.start && dg.end >= sg.end);
+            perDayBreaks[day] = covering ? (covering.end - covering.start) : (sg.end - sg.start);
+        });
+        return { gapStartMin: sg.start, gapEndMin: sg.end, perDayBreaks };
+    });
+
+    // Calculate total compressed minutes (original total minus compressed gaps + indicator sizes)
+    let totalCompressed = gridEndMin - gridStartMin;
+    gaps.forEach(g => {
+        const gapSize = g.gapEndMin - g.gapStartMin;
+        totalCompressed -= (gapSize - GAP_INDICATOR_MINUTES);
+    });
+
+    return { gaps, totalCompressedMinutes: totalCompressed };
+}
+
+/**
+ * Map a real minute value to a compressed display position (as fraction of total visual height).
+ * gapData: result of computeCompressedGaps
+ * Returns a fraction (0 to 1) of the compressed grid height.
+ */
+function compressMinute(realMin, gridStartMin, gapData) {
+    const { gaps, totalCompressedMinutes } = gapData;
+    let virtualMin = realMin - gridStartMin;
+
+    // Accumulate compression offsets
+    for (const g of gaps) {
+        if (realMin <= g.gapStartMin) break;
+        const gapSize = g.gapEndMin - g.gapStartMin;
+        if (realMin >= g.gapEndMin) {
+            // Past this gap entirely: subtract the compressed-away portion
+            virtualMin -= (gapSize - GAP_INDICATOR_MINUTES);
+        } else {
+            // Inside the gap: clamp to the gap indicator position
+            virtualMin = (g.gapStartMin - gridStartMin);
+            // Subtract prior gaps
+            for (const pg of gaps) {
+                if (pg === g) break;
+                virtualMin -= ((pg.gapEndMin - pg.gapStartMin) - GAP_INDICATOR_MINUTES);
+            }
+            break;
+        }
+    }
+
+    return virtualMin / totalCompressedMinutes;
+}
 
 function removeCourse(courseCode, crn = null) {
     // If CRN is provided, use it for specific deletion. Otherwise fall back to courseCode.
@@ -647,10 +882,32 @@ function createCourseBox(course, schedule) {
     box.dataset.days = schedule.days;
     box.courseData = course;
 
+    // Determine effective times (Ramadan or original)
+    let effectiveStartMin = schedule.startMin;
+    let effectiveEndMin = schedule.endMin;
+    let displayTime = schedule.time;
+
+    if (appSettings.showRamadan && !course.isCustom) {
+        const ramadan = getRamadanParsedTime(schedule.time);
+        if (ramadan) {
+            effectiveStartMin = ramadan.startMin;
+            effectiveEndMin = ramadan.endMin;
+            displayTime = ramadan.timeStr;
+        }
+    }
+
     const gridStartMin = currentTimeRange.startHour * 60;
-    const totalGridMinutes = (currentTimeRange.endHour - currentTimeRange.startHour) * 60;
-    const topPercent = ((schedule.startMin - gridStartMin) / totalGridMinutes) * 100;
-    const heightPercent = ((schedule.endMin - schedule.startMin) / totalGridMinutes) * 100;
+    let topPercent, heightPercent;
+
+    if (currentGapData && currentGapData.gaps.length > 0) {
+        topPercent = compressMinute(effectiveStartMin, gridStartMin, currentGapData) * 100;
+        const bottomFrac = compressMinute(effectiveEndMin, gridStartMin, currentGapData);
+        heightPercent = (bottomFrac * 100) - topPercent;
+    } else {
+        const totalGridMinutes = (currentTimeRange.endHour - currentTimeRange.startHour) * 60;
+        topPercent = ((effectiveStartMin - gridStartMin) / totalGridMinutes) * 100;
+        heightPercent = ((effectiveEndMin - effectiveStartMin) / totalGridMinutes) * 100;
+    }
 
     box.style.top = `${topPercent}%`;
     box.style.height = `${heightPercent}%`;
@@ -661,7 +918,7 @@ function createCourseBox(course, schedule) {
             <span class="course-section-badge">${course.section}</span>
         </div>
         <div class="course-detail-inline">
-            <img src="icons/time.png" class="detail-icon"> ${schedule.time}
+            <img src="icons/time.png" class="detail-icon"> ${formatTimeAuto(displayTime)}
         </div>
         <div class="course-detail-inline loc">
             <img src="icons/location.png" class="detail-icon"> ${schedule.room || 'TBA'}
@@ -706,58 +963,89 @@ const RAMADAN_START_TIMES = {
     '23:30': '02:20'
 };
 
-function getRamadanTime(timeStr) {
+// Convert 12h time string start to 24h key for RAMADAN_START_TIMES lookup
+function _to24hKey(t) {
+    const match = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!match) return null;
+    let h = parseInt(match[1]);
+    const m = match[2];
+    const period = (match[3] || 'AM').toUpperCase();
+    if (period === 'PM' && h < 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0;
+    return `${h.toString().padStart(2, '0')}:${m}`;
+}
+
+// Format total minutes (can exceed 24h, e.g. 25*60 = 1 AM next day) to "HH:MM AM/PM"
+function _formatMinsTo12h(mins) {
+    let h = Math.floor(mins / 60) % 24; // wrap around 24
+    const m = mins % 60;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    if (h > 12) h -= 12;
+    if (h === 0) h = 12;
+    return `${h}:${m.toString().padStart(2, '0')} ${ampm}`;
+}
+
+/**
+ * Convert a 12h time string (or range) to 24h if appSettings.use24h is true.
+ * Input: "1:30 PM", "9:00 AM - 10:30 AM", etc.
+ * Output: "13:30", "09:00 - 10:30", etc. (or original if 24h is off)
+ */
+function formatTimeAuto(timeStr) {
+    if (!appSettings.use24h || !timeStr) return timeStr;
+    return timeStr.replace(/(\d{1,2}):(\d{2})\s*(AM|PM)/gi, (match, h, m, period) => {
+        let hour = parseInt(h);
+        const p = period.toUpperCase();
+        if (p === 'PM' && hour < 12) hour += 12;
+        if (p === 'AM' && hour === 12) hour = 0;
+        return `${hour.toString().padStart(2, '0')}:${m}`;
+    });
+}
+
+/**
+ * Format minutes to time string respecting 24h setting.
+ */
+function _formatMinsAuto(mins) {
+    if (appSettings.use24h) {
+        const h = Math.floor(mins / 60) % 24;
+        const m = mins % 60;
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    }
+    return _formatMinsTo12h(mins);
+}
+
+// Returns { startMin, endMin, timeStr } for a Ramadan-mapped time, or null if no mapping
+function getRamadanParsedTime(timeStr) {
     if (!timeStr || !timeStr.includes('-')) return null;
     const [start, end] = timeStr.split(' - ');
 
-    // Convert 12h to 24h for lookup
-    // E.g., "8:00 AM" -> "08:00", "1:30 PM" -> "13:30"
-    const to24h = (t) => {
-        const match = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-        if (!match) return null;
-        let h = parseInt(match[1]);
-        const m = match[2];
-        const period = (match[3] || 'AM').toUpperCase();
-        if (period === 'PM' && h < 12) h += 12;
-        if (period === 'AM' && h === 12) h = 0;
-        return `${h.toString().padStart(2, '0')}:${m}`;
-    };
-
-    const startKey = to24h(start);
+    const startKey = _to24hKey(start);
     if (!startKey) return null;
 
     const mappedStart = RAMADAN_START_TIMES[startKey];
     if (!mappedStart) return null;
 
-    // Calculate duration
-    const startMin = parseTime(start);
-    const endMin = parseTime(end);
-    const duration = endMin - startMin;
+    // Original duration scaled to 70%
+    const origStartMin = parseTime(start);
+    const origEndMin = parseTime(end);
+    const duration = origEndMin - origStartMin;
     const ramadanDuration = Math.round(duration * 0.7);
 
-    // Calculate new end time
-    const newStartMin = parseTime(mappedStart + (parseTime(mappedStart) < 720 && !mappedStart.includes('PM') ? ' AM' : ' PM')); // Hacky 12h guess
-    // Better: parseTime handles "10:00" as AM if no suffix? No, parseTime expects suffix.
-
-    // Simple 24h helper for Ramadan math since keys are simplistic
-    // Let's assume keys are 24h-ish or just HH:MM
-    // Actually, create a robust adder
-
+    // New start/end in total minutes (24h-based, can exceed 1440 for after-midnight)
     const [h, m] = mappedStart.split(':').map(Number);
-    let startMins = h * 60 + m;
-    let endMins = startMins + ramadanDuration;
+    const newStartMin = h * 60 + m;
+    const newEndMin = newStartMin + ramadanDuration;
 
-    const formatMins = (mins) => {
-        let h = Math.floor(mins / 60);
-        let m = mins % 60;
-        const ampm = h >= 12 && h < 24 ? 'PM' : 'AM';
-        if (h > 12) h -= 12;
-        if (h === 0) h = 12;
-        if (h > 12) h -= 24; // Handle >24 wrapping if needed
-        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+    return {
+        startMin: newStartMin,
+        endMin: newEndMin,
+        timeStr: `${_formatMinsTo12h(newStartMin)} - ${_formatMinsTo12h(newEndMin)}`
     };
+}
 
-    return `${formatMins(startMins)} - ${formatMins(endMins)}`;
+// Returns formatted Ramadan time string, or null
+function getRamadanTime(timeStr) {
+    const parsed = getRamadanParsedTime(timeStr);
+    return parsed ? parsed.timeStr : null;
 }
 
 function showCourseDetails(course) {
@@ -773,17 +1061,13 @@ function showCourseDetails(course) {
     const isUniCourse = !!course.crn && !course.isCustom;
 
     const schedulesHtml = course.schedules.map((s, index) => {
-        const ramadanTime = isUniCourse && appSettings.showRamadan ? getRamadanTime(s.time) : null;
+        // Show only one time: Ramadan when enabled, original otherwise
+        const displayTime = formatTimeAuto((isUniCourse && appSettings.showRamadan) ? (getRamadanTime(s.time) || s.time) : s.time);
 
         return `
         ${index > 0 ? '<hr style="border:0; border-top:1px dashed var(--border-color); margin:10px 0;">' : ''}
         <div class="details-row"><span class="details-label"><img src="icons/days.png" class="section-icon"> Days:</span><span class="details-value">${formatDays(s.days)}</span></div>
-        <div class="details-row"><span class="details-label"><img src="icons/time.png" class="section-icon"> Time:</span><span class="details-value">
-            ${s.time}
-            ${ramadanTime ? `<div class="ramadan-time" style="margin-top:4px; color:var(--accent-primary); font-size:13px; display:flex; align-items:center;">
-                <img src="icons/moon.png" style="width:14px; height:14px; margin-right:6px;"> ${ramadanTime}
-            </div>` : ''}
-        </span></div>
+        <div class="details-row"><span class="details-label"><img src="icons/time.png" class="section-icon"> Time:</span><span class="details-value">${displayTime}</span></div>
         <div class="details-row"><span class="details-label"><img src="icons/location.png" class="section-icon"> Location:</span><span class="details-value">${s.room || 'TBA'}</span></div>
         <div class="details-row"><span class="details-label"><img src="icons/instructor.png" class="section-icon"> Instructor:</span><span class="details-value">${s.instructor || 'TBA'}</span></div>
     `}).join('');
@@ -847,7 +1131,24 @@ function displayCourses(courses) {
 
     currentTimeRange = calculateTimeRange(courses);
     const { startHour, endHour } = currentTimeRange;
-    const gridHeight = (endHour - startHour) * PIXELS_PER_HOUR;
+
+    // Compute gap compression if enabled
+    currentGapData = null;
+    if (compressGapsEnabled) {
+        currentGapData = computeCompressedGaps(courses, currentTimeRange);
+        if (currentGapData.gaps.length === 0) currentGapData = null; // no compressible gaps
+    }
+
+    const gridStartMin = startHour * 60;
+    const totalMin = (endHour - startHour) * 60;
+
+    // Adjust grid height for compression
+    let gridHeight;
+    if (currentGapData) {
+        gridHeight = (currentGapData.totalCompressedMinutes / 60) * PIXELS_PER_HOUR;
+    } else {
+        gridHeight = (endHour - startHour) * PIXELS_PER_HOUR;
+    }
 
     container.innerHTML = '';
 
@@ -869,30 +1170,126 @@ function displayCourses(courses) {
 
     const timeColumn = document.createElement('div');
     timeColumn.className = 'time-column';
-    const totalMin = (endHour - startHour) * 60;
+
+    // Helper to check if a minute falls inside a compressed gap
+    const isInsideGap = (min) => {
+        if (!currentGapData) return false;
+        return currentGapData.gaps.some(g => min > g.gapStartMin && min < g.gapEndMin);
+    };
 
     for (let h = startHour; h <= endHour; h++) {
-        const h12 = h % 12 || 12;
-        const ampm = h < 12 ? 'AM' : 'PM';
+        const hMin = h * 60;
+        // Skip time labels inside compressed gaps
+        if (isInsideGap(hMin)) continue;
+
         const label = document.createElement('div');
         label.className = 'time-label';
-        const top = ((h - startHour) * 60 / totalMin) * 100;
+
+        let top;
+        if (currentGapData) {
+            top = compressMinute(hMin, gridStartMin, currentGapData) * 100;
+        } else {
+            top = ((h - startHour) * 60 / totalMin) * 100;
+        }
         label.style.top = `${top}%`;
-        label.textContent = `${h12} ${ampm}`;
+        if (appSettings.use24h) {
+            label.textContent = `${(h % 24).toString().padStart(2, '0')}:00`;
+        } else {
+            const h12 = h % 12 || 12;
+            const ampm = h < 12 ? 'AM' : 'PM';
+            label.textContent = `${h12} ${ampm}`;
+        }
         timeColumn.appendChild(label);
     }
+
+    // Add gap indicators in time column
+    if (currentGapData) {
+        currentGapData.gaps.forEach(g => {
+            const gapEl = document.createElement('div');
+            gapEl.className = 'gap-indicator gap-indicator-time';
+            const gapTop = compressMinute(g.gapStartMin, gridStartMin, currentGapData) * 100;
+            const gapBottom = compressMinute(g.gapEndMin, gridStartMin, currentGapData) * 100;
+            gapEl.style.top = `${gapTop}%`;
+            gapEl.style.height = `${gapBottom - gapTop}%`;
+            timeColumn.appendChild(gapEl);
+        });
+    }
+
     gridBody.appendChild(timeColumn);
 
     DAYS.forEach(day => {
         const dayColumn = document.createElement('div');
         dayColumn.dataset.day = day;
-        dayColumn.className = 'day-column'; // Fix missing class
+        dayColumn.className = 'day-column';
 
         for (let h = startHour; h <= endHour; h++) {
+            const hMin = h * 60;
+            if (isInsideGap(hMin)) continue;
+
             const line = document.createElement('div');
             line.className = 'hour-line';
-            line.style.top = `${((h - startHour) * 60 / totalMin) * 100}%`;
+            let lineTop;
+            if (currentGapData) {
+                lineTop = compressMinute(hMin, gridStartMin, currentGapData) * 100;
+            } else {
+                lineTop = ((h - startHour) * 60 / totalMin) * 100;
+            }
+            line.style.top = `${lineTop}%`;
             dayColumn.appendChild(line);
+        }
+
+        // Add gap indicators in each day column
+        if (currentGapData) {
+            currentGapData.gaps.forEach(g => {
+                const gapEl = document.createElement('div');
+                gapEl.className = 'gap-indicator gap-indicator-day';
+                const gapTop = compressMinute(g.gapStartMin, gridStartMin, currentGapData) * 100;
+                const gapBottom = compressMinute(g.gapEndMin, gridStartMin, currentGapData) * 100;
+                gapEl.style.top = `${gapTop}%`;
+                gapEl.style.height = `${gapBottom - gapTop}%`;
+
+                // Only show per-day break duration if this gap is actually BETWEEN two courses on this specific day
+                // (i.e., not just space before the first course or after the last course of this day)
+                const dayIntervals = DAYS.reduce((acc, d) => { acc[d] = []; return acc; }, {});
+                courses.forEach(c => {
+                    c.schedules.forEach(s => {
+                        const p = parseScheduleTime(s);
+                        if (!p) return;
+                        let sMin = p.startMin, eMin = p.endMin;
+                        if (appSettings.showRamadan && !c.isCustom) {
+                            const r = getRamadanParsedTime(s.time);
+                            if (r) { sMin = r.startMin; eMin = r.endMin; }
+                        }
+                        p.days.split('').forEach(d => {
+                            if (DAY_MAP[d] === day) dayIntervals[day].push({ start: sMin, end: eMin });
+                        });
+                    });
+                });
+                if (typeof addedTasks !== 'undefined') {
+                    addedTasks.forEach(t => {
+                        const [h1, m1] = t.startTime.split(':').map(Number);
+                        const [h2, m2] = t.endTime.split(':').map(Number);
+                        t.days.split('').forEach(d => {
+                            if (DAY_MAP[d] === day) dayIntervals[day].push({ start: h1 * 60 + m1, end: h2 * 60 + m2 });
+                        });
+                    });
+                }
+
+                const dayItems = dayIntervals[day];
+                const hasCourseBefore = dayItems.some(i => i.end <= g.gapStartMin + 5);
+                const hasCourseAfter = dayItems.some(i => i.start >= g.gapEndMin - 5);
+
+                const breakMin = g.perDayBreaks[day];
+                if (breakMin && hasCourseBefore && hasCourseAfter) {
+                    const breakH = Math.floor(breakMin / 60);
+                    const breakM = breakMin % 60;
+                    const label = breakH > 0
+                        ? (breakM > 0 ? `${breakH}h ${breakM}m` : `${breakH}h`)
+                        : `${breakM}m`;
+                    gapEl.innerHTML = `<span class="gap-label">${label}</span>`;
+                }
+                dayColumn.appendChild(gapEl);
+            });
         }
 
         courses.forEach(course => {
@@ -918,10 +1315,20 @@ function displayCourses(courses) {
 
                 const taskBox = document.createElement('div');
                 taskBox.className = 'course-box task-box';
-                const startOffset = startMin - startHour * 60;
-                const duration = endMin - startMin;
-                taskBox.style.top = `${(startOffset / totalMin) * 100}%`;
-                taskBox.style.height = `${(duration / totalMin) * 100}%`;
+
+                let taskTop, taskHeight;
+                if (currentGapData && currentGapData.gaps.length > 0) {
+                    taskTop = compressMinute(startMin, gridStartMin, currentGapData) * 100;
+                    const taskBottom = compressMinute(endMin, gridStartMin, currentGapData) * 100;
+                    taskHeight = taskBottom - taskTop;
+                } else {
+                    const startOffset = startMin - gridStartMin;
+                    const duration = endMin - startMin;
+                    taskTop = (startOffset / totalMin) * 100;
+                    taskHeight = (duration / totalMin) * 100;
+                }
+                taskBox.style.top = `${taskTop}%`;
+                taskBox.style.height = `${taskHeight}%`;
 
                 taskBox.innerHTML = `
                     <div class="course-box-header">
@@ -977,9 +1384,16 @@ function generateMobileScheduleList(courses, container) {
     courses.forEach(c => {
         c.schedules.forEach(s => {
             const p = parseScheduleTime(s);
-            if (p) p.days.split('').forEach(d => {
+            if (!p) return;
+            // Use Ramadan start time for sorting when enabled
+            let sortStart = p.startMin;
+            if (appSettings.showRamadan && !c.isCustom) {
+                const ramadan = getRamadanParsedTime(s.time);
+                if (ramadan) sortStart = ramadan.startMin;
+            }
+            p.days.split('').forEach(d => {
                 const name = DAY_MAP[d];
-                if (daysWithCourses[name]) daysWithCourses[name].push({ course: c, schedule: s, start: p.startMin, isTask: false });
+                if (daysWithCourses[name]) daysWithCourses[name].push({ course: c, schedule: s, start: sortStart, isTask: false });
             });
         });
     });
@@ -1046,8 +1460,8 @@ function generateMobileScheduleList(courses, container) {
                 card.className = 'mobile-course-card';
                 card.dataset.courseCode = codeStr;
 
-                const ramadanTime = !course.isCustom ? getRamadanTime(schedule.time) : null;
-                const ramadanHtml = ramadanTime ? `<span class="ramadan-time-inline"><img src="icons/moon.png" class="meta-icon"> ${ramadanTime}</span>` : '';
+                // Show only one time: Ramadan when enabled, original otherwise
+                const displayTime = formatTimeAuto((appSettings.showRamadan && !course.isCustom) ? (getRamadanTime(schedule.time) || schedule.time) : schedule.time);
 
                 card.innerHTML = `
                     <div class="card-header-row">
@@ -1061,7 +1475,7 @@ function generateMobileScheduleList(courses, container) {
                     </div>
                     <div class="mobile-course-title">${course.title || ''}</div>
                     <div class="course-meta">
-                        <div class="meta-row"><img src="icons/time.png" class="meta-icon"> ${schedule.time} ${ramadanHtml}</div>
+                        <div class="meta-row"><img src="icons/time.png" class="meta-icon"> ${displayTime}</div>
                         <div class="meta-row"><img src="icons/location.png" class="meta-icon"> ${schedule.room || 'TBA'}</div>
                         <div class="meta-row"><img src="icons/instructor.png" class="meta-icon"> ${schedule.instructor || 'TBA'}</div>
                     </div>
@@ -1223,7 +1637,8 @@ function populateTimeSelect(elementId) {
         const h12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
         const ampm = h >= 12 ? 'PM' : 'AM';
         const val = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-        const label = `${h12}:${m.toString().padStart(2, '0')} ${ampm}`;
+        const label12h = `${h12}:${m.toString().padStart(2, '0')} ${ampm}`;
+        const label = appSettings.use24h ? val : label12h;
         const opt = document.createElement('option');
         opt.value = val;
         opt.textContent = label;
@@ -1359,16 +1774,11 @@ async function showSectionChoices(code) {
                 </div>
                 <div class="section-details">
                     ${course.schedules.map(s => {
-                const ramadanTime = appSettings.showRamadan ? getRamadanTime(s.time) : null;
+                const displayTime = formatTimeAuto(appSettings.showRamadan ? (getRamadanTime(s.time) || s.time) : s.time);
                 return `
                         <div class="schedule-row">
                             <div class="detail-row"><span class="detail-label"><img src="icons/days.png" class="section-icon"> Days:</span><span class="detail-value">${formatDays(s.days)}</span></div>
-                            <div class="detail-row"><span class="detail-label"><img src="icons/time.png" class="section-icon"> Time:</span><span class="detail-value">
-                                ${s.time}
-                                ${ramadanTime ? `<span class="ramadan-time-inline" style="margin-left:8px; color:var(--accent-primary); font-size:11px;">
-                                    <img src="icons/moon.png" style="width:12px; height:12px; margin-right:2px; vertical-align:text-bottom;"> ${ramadanTime}
-                                </span>` : ''}
-                            </span></div>
+                            <div class="detail-row"><span class="detail-label"><img src="icons/time.png" class="section-icon"> Time:</span><span class="detail-value">${displayTime}</span></div>
                             <div class="detail-row"><span class="detail-label"><img src="icons/location.png" class="section-icon"> Location:</span><span class="detail-value">${s.room || 'TBA'}</span></div>
                             <div class="detail-row"><span class="detail-label"><img src="icons/instructor.png" class="section-icon"> Instructor:</span><span class="detail-value">${s.instructor || course.primaryInstructor || 'TBA'}</span></div>
                         </div>
@@ -1575,6 +1985,11 @@ document.addEventListener('DOMContentLoaded', () => {
         panel?.classList.toggle('expanded');
     });
 
+    // Section-picker modal close button (replaced inline onclick)
+    document.getElementById('modalCloseBtn')?.addEventListener('click', () => {
+        closeModal('modal');
+    });
+
     document.getElementById('major')?.addEventListener('change', function () {
         currentMajor = this.value;
         const blockSelect = document.getElementById('block');
@@ -1747,6 +2162,18 @@ document.addEventListener('DOMContentLoaded', () => {
             updateSuggestedCourses();
         }
     });
+
+    // Compress Gaps toggle
+    const compressGapsBtn = document.getElementById('compressGapsBtn');
+    if (compressGapsBtn) {
+        if (compressGapsEnabled) compressGapsBtn.classList.add('active');
+        compressGapsBtn.addEventListener('click', () => {
+            compressGapsEnabled = !compressGapsEnabled;
+            localStorage.setItem('fcitindex-compress-gaps', compressGapsEnabled);
+            compressGapsBtn.classList.toggle('active', compressGapsEnabled);
+            refreshSchedule();
+        });
+    }
 
     // Logo click - same as Reset Schedule
     document.getElementById('logoBtn')?.addEventListener('click', async () => {
@@ -2053,7 +2480,8 @@ const defaultSettings = {
     showRamadan: false,
     showCrn: true,
     showCredits: true,
-    showFullDays: false
+    showFullDays: false,
+    use24h: false
 };
 
 let appSettings = { ...defaultSettings };
@@ -2076,10 +2504,12 @@ function syncSettingsUI() {
     const ramadanToggle = document.getElementById('settingRamadan');
     const crnToggle = document.getElementById('settingCrn');
     const creditsToggle = document.getElementById('settingCredits');
+    const use24hToggle = document.getElementById('setting24h');
 
     if (ramadanToggle) ramadanToggle.checked = appSettings.showRamadan;
     if (crnToggle) crnToggle.checked = appSettings.showCrn;
     if (creditsToggle) creditsToggle.checked = appSettings.showCredits;
+    if (use24hToggle) use24hToggle.checked = appSettings.use24h;
 }
 
 function applySettings() {
@@ -2135,10 +2565,27 @@ function initSettingsListeners() {
 
     if (ramadanToggle) {
         ramadanToggle.checked = appSettings.showRamadan;
-        ramadanToggle.onchange = () => {
+        ramadanToggle.onchange = async () => {
+            if (ramadanToggle.checked) {
+                // Check for conflicts before enabling Ramadan mode
+                const conflicts = checkRamadanConflicts();
+                if (conflicts.length > 0) {
+                    const conflictList = conflicts.map(c => `• ${c}`).join('\n');
+                    await showAlertModal(
+                        'Ramadan Time Conflict',
+                        `Cannot enable Ramadan times. The following conflicts must be resolved first:\n\n${conflictList}`
+                    );
+                    ramadanToggle.checked = false;
+                    appSettings.showRamadan = false;
+                    saveSettings();
+                    refreshSchedule();
+                    return;
+                }
+            }
             appSettings.showRamadan = ramadanToggle.checked;
             saveSettings();
             applySettings();
+            refreshSchedule();
         };
     }
 
@@ -2159,6 +2606,29 @@ function initSettingsListeners() {
             applySettings();
         };
     }
+
+    const use24hToggle = document.getElementById('setting24h');
+    if (use24hToggle) {
+        use24hToggle.checked = appSettings.use24h;
+        use24hToggle.onchange = () => {
+            appSettings.use24h = use24hToggle.checked;
+            saveSettings();
+            populateTimeFilter(); // Refresh dropdown labels
+
+            // Re-render everything from scratch to apply 24h format safely
+            const stateJson = localStorage.getItem('scheduleState');
+            if (stateJson) {
+                try {
+                    const courses = JSON.parse(stateJson);
+                    displayCourses(courses);
+                } catch (e) {
+                    refreshSchedule();
+                }
+            } else {
+                refreshSchedule();
+            }
+        };
+    }
 }
 
 // Initialize task modal listeners
@@ -2168,12 +2638,7 @@ function initTaskListeners() {
     const closeTaskBtn = document.getElementById('closeTaskModalBtn');
     const addTaskBtn = document.getElementById('addTaskBtn');
 
-    // Settings change listeners
-    document.getElementById('settingRamadan')?.addEventListener('change', (e) => {
-        appSettings.showRamadan = e.target.checked;
-        saveSettings();
-        refreshSchedule();
-    });
+    // Note: Ramadan listener is handled in initSettingsListeners (with conflict check)
 
     document.getElementById('settingFullDays')?.addEventListener('change', (e) => {
         appSettings.showFullDays = e.target.checked;
@@ -2322,6 +2787,100 @@ function updateTotalCredits() {
 }
 
 // Function to refresh schedule (called by addTask, etc)
+// Check for time conflicts if Ramadan mode were enabled
+// Returns array of conflict description strings (empty = no conflicts)
+function checkRamadanConflicts() {
+    const courses = getAllCoursesFromGrid();
+    const conflicts = [];
+
+    // Build list of items that would NOT move (custom courses + tasks)
+    const fixedItems = []; // { label, days: [dayCode], startMin, endMin }
+
+    courses.forEach(c => {
+        if (!c.isCustom) return;
+        c.schedules.forEach(s => {
+            const p = parseScheduleTime(s);
+            if (p) {
+                fixedItems.push({
+                    label: formatCourseCode(c.subject, c.courseCode),
+                    days: p.days.split(''),
+                    startMin: p.startMin,
+                    endMin: p.endMin
+                });
+            }
+        });
+    });
+
+    if (typeof addedTasks !== 'undefined') {
+        addedTasks.forEach(t => {
+            const [h1, m1] = t.startTime.split(':').map(Number);
+            const [h2, m2] = t.endTime.split(':').map(Number);
+            fixedItems.push({
+                label: t.title,
+                days: t.days.split(''),
+                startMin: h1 * 60 + m1,
+                endMin: h2 * 60 + m2
+            });
+        });
+    }
+
+    if (fixedItems.length === 0) return [];
+
+    // Build list of Ramadan-mapped items
+    const ramadanItems = [];
+    courses.forEach(c => {
+        if (c.isCustom) return;
+        c.schedules.forEach(s => {
+            const ramadan = getRamadanParsedTime(s.time);
+            const p = parseScheduleTime(s);
+            if (ramadan && p) {
+                ramadanItems.push({
+                    label: formatCourseCode(c.subject, c.courseCode),
+                    days: p.days.split(''),
+                    startMin: ramadan.startMin,
+                    endMin: ramadan.endMin
+                });
+            }
+        });
+    });
+
+    // Check each Ramadan-mapped item against each fixed item
+    const seen = new Set();
+    ramadanItems.forEach(ri => {
+        fixedItems.forEach(fi => {
+            // Check if they share any day
+            const sharedDays = ri.days.filter(d => fi.days.includes(d));
+            if (sharedDays.length === 0) return;
+
+            if (timeRangesOverlap(ri.startMin, ri.endMin, fi.startMin, fi.endMin)) {
+                const key = `${ri.label}|${fi.label}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    conflicts.push(`${ri.label} (Ramadan) conflicts with ${fi.label}`);
+                }
+            }
+        });
+    });
+
+    // Also check Ramadan-mapped items against each other
+    for (let i = 0; i < ramadanItems.length; i++) {
+        for (let j = i + 1; j < ramadanItems.length; j++) {
+            const a = ramadanItems[i], b = ramadanItems[j];
+            const sharedDays = a.days.filter(d => b.days.includes(d));
+            if (sharedDays.length === 0) continue;
+            if (timeRangesOverlap(a.startMin, a.endMin, b.startMin, b.endMin)) {
+                const key = `${a.label}|${b.label}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    conflicts.push(`${a.label} conflicts with ${b.label} in Ramadan times`);
+                }
+            }
+        }
+    }
+
+    return conflicts;
+}
+
 function refreshSchedule() {
     const courses = getAllCoursesFromGrid();
     displayCourses(courses);

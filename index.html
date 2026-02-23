@@ -4,21 +4,27 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FCITIndex</title>
+    <meta name="description"
+        content="FCITIndex — Build your own FCIT course schedule. Browse blocks, search courses, and plan your semester." />
+    <meta name="theme-color" content="#0a0a14" />
+    <title>FCITIndex — Build Your Own FCIT Schedule</title>
     <link rel="stylesheet" href="style.css" />
     <link rel="icon" type="image/png" href="icons/favicon.png">
 </head>
 
 <body>
+    <a href="#blockForm" class="skip-link">Skip to main content</a>
     <div id="splash-screen">
-        <img src="icons/logo.png" alt="FCITIndex Logo" class="splash-logo">
+        <img src="icons/logo.png" alt="FCITIndex Logo" class="splash-logo" width="200" height="200">
     </div>
 
     <header class="site-header">
-        <button id="logoBtn" class="logo-section" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
-            <img src="icons/favicon.png" alt="FCITIndex" class="header-logo default-logo">
-            <img src="icons/favicon_light.png" alt="FCITIndex" class="header-logo light-logo">
-            <img src="icons/logo.png" alt="FCITIndex" class="header-logo mobile-logo">
+        <button id="logoBtn" class="logo-section" aria-label="Scroll to top">
+            <img src="icons/favicon.png" alt="" class="header-logo default-logo" width="40" height="40"
+                aria-hidden="true">
+            <img src="icons/favicon_light.png" alt="" class="header-logo light-logo" width="40" height="40"
+                aria-hidden="true">
+            <img src="icons/logo.png" alt="" class="header-logo mobile-logo" width="40" height="40" aria-hidden="true">
             <div class="logo-text-container">
                 <span class="logo">FCITINDEX</span>
                 <span class="logo-tagline">Build Your Own Schedule</span>
@@ -26,11 +32,12 @@
         </button>
 
         <div class="header-actions">
-            <button id="settingsBtn" class="settings-toggle" title="Settings">
-                <img src="icons/settings.png" alt="" class="settings-icon">
+            <button id="settingsBtn" class="settings-toggle" title="Settings" aria-label="Settings">
+                <img src="icons/settings.png" alt="" class="settings-icon" width="18" height="18" aria-hidden="true">
             </button>
-            <button id="themeToggle" class="theme-toggle" title="Toggle Light/Dark Mode">
-                <img src="icons/moon.png" alt="" class="theme-icon">
+            <button id="themeToggle" class="theme-toggle" title="Toggle Light/Dark Mode"
+                aria-label="Toggle Light/Dark Mode">
+                <img src="icons/moon.png" alt="" class="theme-icon" width="18" height="18" aria-hidden="true">
             </button>
         </div>
     </header>
@@ -47,13 +54,13 @@
         </div>
         <div id="timetableContainer"></div>
         <div id="scheduleControls" class="hidden">
-            <button id="mobileViewToggle" class="mobile-view-toggle">
-                <img src="icons/grid.png" alt=""> Switch to Grid View
+            <button id="mobileViewToggle" class="mobile-view-toggle" aria-label="Switch to Grid View">
+                <img src="icons/grid.png" alt="" width="18" height="18" aria-hidden="true"> Switch to Grid View
             </button>
-            <div class="schedule-actions-right" style="display:flex; gap:10px;">
-                <button id="clearCoursesBtn" class="clear-btn">CLEAR SCHEDULE</button>
-                <button id="changeBlockBtn" class="clear-btn">CHANGE BLOCK</button>
-            </div>
+            <button id="compressGapsBtn" class="action-btn compress-gaps-btn" aria-label="Toggle Compress Gaps">COMPRESS
+                GAPS</button>
+            <button id="clearCoursesBtn" class="clear-btn">CLEAR SCHEDULE</button>
+            <button id="changeBlockBtn" class="clear-btn">CHANGE BLOCK</button>
         </div>
     </div>
 
@@ -62,9 +69,10 @@
 
         <div class="search-container">
             <div class="search-pill">
-                <input type="text" id="courseInput" placeholder="Search for any course (e.g., MATH-202)">
-                <button id="fetchBtn" title="Search">
-                    <img src="icons/search.png" alt="" class="search-icon">
+                <input type="text" id="courseInput" placeholder="Search for any course (e.g., MATH-202)"
+                    autocomplete="off">
+                <button id="fetchBtn" title="Search" aria-label="Search">
+                    <img src="icons/search.png" alt="" class="search-icon" width="24" height="24" aria-hidden="true">
                 </button>
             </div>
         </div>
@@ -80,11 +88,13 @@
                 <div class="modal-header">
                     <h3 id="modalTitle">Choose a section for <span></span></h3>
                     <div class="modal-header-buttons">
-                        <button id="mobileFilterToggle" class="mobile-filter-toggle" title="Toggle Filters">
-                            <img src="icons/filter.png" alt="" class="filter-toggle-icon">
+                        <button id="mobileFilterToggle" class="mobile-filter-toggle" title="Toggle Filters"
+                            aria-label="Toggle Filters">
+                            <img src="icons/filter.png" alt="" class="filter-toggle-icon" width="18" height="18"
+                                aria-hidden="true">
                         </button>
-                        <button onclick="closeModal('modal')" class="modal-close-btn" title="Close">
-                            <img src="icons/x.png" alt="">
+                        <button id="modalCloseBtn" class="modal-close-btn" title="Close" aria-label="Close">
+                            <img src="icons/x.png" alt="" width="20" height="20" aria-hidden="true">
                         </button>
                     </div>
                 </div>
@@ -94,17 +104,18 @@
                         <div class="filter-row-pair">
                             <div class="filter-row">
                                 <label for="filterInstructor" class="filter-label">Instructor</label>
-                                <input type="text" id="filterInstructor" placeholder="e.g. Ahmed">
+                                <input type="text" id="filterInstructor" placeholder="e.g. Ahmed" autocomplete="off">
                             </div>
                             <div class="filter-row">
                                 <label for="filterSection" class="filter-label">Section</label>
-                                <input type="text" id="filterSection" placeholder="e.g. AB">
+                                <input type="text" id="filterSection" placeholder="e.g. AB" autocomplete="off">
                             </div>
                         </div>
                         <div class="filter-row-pair">
                             <div class="filter-row">
                                 <label for="filterCrn" class="filter-label">CRN</label>
-                                <input type="text" id="filterCrn" placeholder="e.g. 10881">
+                                <input type="text" id="filterCrn" placeholder="e.g. 10881" autocomplete="off"
+                                    inputmode="numeric">
                             </div>
                             <div class="filter-row">
                                 <label for="filterStartTime" class="filter-label">Start Time</label>
@@ -160,48 +171,48 @@
         <div class="modal-content details-modal">
             <div class="modal-header">
                 <h3>Add Other Course</h3>
-                <button id="closeCustomBtn" class="modal-close-btn">
-                    <img src="icons/x.png" alt="">
+                <button id="closeCustomBtn" class="modal-close-btn" aria-label="Close">
+                    <img src="icons/x.png" alt="" width="20" height="20" aria-hidden="true">
                 </button>
             </div>
             <div class="modal-body filters-panel form-panel-full">
                 <div class="filter-row-pair">
                     <div class="filter-row">
                         <label class="filter-label">Course Code</label>
-                        <input type="text" id="customCode" placeholder="e.g. MATH-101">
+                        <input type="text" id="customCode" placeholder="e.g. MATH-101" autocomplete="off">
                     </div>
                     <div class="filter-row">
                         <label class="filter-label">Course Title</label>
-                        <input type="text" id="customTitle" placeholder="e.g. Calculus I">
+                        <input type="text" id="customTitle" placeholder="e.g. Calculus I" autocomplete="off">
                     </div>
                 </div>
 
                 <div class="filter-row-pair">
                     <div class="filter-row">
                         <label class="filter-label">Section</label>
-                        <input type="text" id="customSection" placeholder="e.g. AA">
+                        <input type="text" id="customSection" placeholder="e.g. AA" autocomplete="off">
                     </div>
                     <div class="filter-row">
                         <label class="filter-label">CRN</label>
-                        <input type="number" id="customCrn" placeholder="CRN">
+                        <input type="number" id="customCrn" placeholder="CRN" autocomplete="off" inputmode="numeric">
                     </div>
                 </div>
 
                 <div class="filter-row-pair">
                     <div class="filter-row">
                         <label class="filter-label">Credits</label>
-                        <input type="number" id="customCredits" placeholder="3">
+                        <input type="number" id="customCredits" placeholder="3" autocomplete="off">
                     </div>
                     <div class="filter-row">
                         <label class="filter-label">Room</label>
-                        <input type="text" id="customRoom" placeholder="Room 101">
+                        <input type="text" id="customRoom" placeholder="Room 101" autocomplete="off">
                     </div>
                 </div>
 
                 <div class="filter-row-pair">
                     <div class="filter-row">
                         <label class="filter-label">Instructor</label>
-                        <input type="text" id="customInstructor" placeholder="Name">
+                        <input type="text" id="customInstructor" placeholder="Name" autocomplete="off">
                     </div>
                 </div>
 
@@ -248,8 +259,8 @@
         <div class="modal-content details-modal">
             <div class="modal-header">
                 <h3 id="detailsTitle">Course Details</h3>
-                <button id="closeDetailsBtn" class="modal-close-btn">
-                    <img src="icons/x.png" alt="">
+                <button id="closeDetailsBtn" class="modal-close-btn" aria-label="Close">
+                    <img src="icons/x.png" alt="" width="20" height="20" aria-hidden="true">
                 </button>
             </div>
             <div class="details-body" id="detailsContent">
@@ -278,21 +289,21 @@
         <div class="modal-content details-modal">
             <div class="modal-header">
                 <h3>Add Task</h3>
-                <button id="closeTaskModalBtn" class="modal-close-btn">
-                    <img src="icons/x.png" alt="">
+                <button id="closeTaskModalBtn" class="modal-close-btn" aria-label="Close">
+                    <img src="icons/x.png" alt="" width="20" height="20" aria-hidden="true">
                 </button>
             </div>
             <div class="modal-body filters-panel form-panel-full">
                 <div class="filter-row-pair">
                     <div class="filter-row">
                         <label class="filter-label">Title</label>
-                        <input type="text" id="taskTitle" placeholder="e.g., Study Session">
+                        <input type="text" id="taskTitle" placeholder="e.g., Study Session" autocomplete="off">
                     </div>
                 </div>
                 <div class="filter-row-pair">
                     <div class="filter-row">
                         <label class="filter-label">Subtitle</label>
-                        <input type="text" id="taskSubtitle" placeholder="e.g., Library Room 3">
+                        <input type="text" id="taskSubtitle" placeholder="e.g., Library Room 3" autocomplete="off">
                     </div>
                 </div>
 
@@ -343,8 +354,8 @@
         <div class="modal-content settings-modal">
             <div class="modal-header">
                 <h3>Settings</h3>
-                <button id="closeSettingsBtn" class="modal-close-btn">
-                    <img src="icons/x.png" alt="">
+                <button id="closeSettingsBtn" class="modal-close-btn" aria-label="Close">
+                    <img src="icons/x.png" alt="" width="20" height="20" aria-hidden="true">
                 </button>
             </div>
             <div class="modal-body">
@@ -391,13 +402,24 @@
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
+
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <span class="setting-label">24-Hour Format</span>
+                        <span class="setting-desc">Display times in 24-hour format (e.g. 13:00 instead of 1 PM)</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="setting24h">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
             </div>
         </div>
     </div>
 
 
     <div class="form-logo-block">
-        <img src="icons/logo.png" alt="FCIT Index">
+        <img src="icons/logo.png" alt="FCIT Index" width="200" height="200">
     </div>
     <main>
         <form id="blockForm">
@@ -448,7 +470,7 @@
         </form>
     </main>
 
-    <div id="toast" class="toast hidden">
+    <div id="toast" class="toast hidden" role="status" aria-live="polite">
         <span id="toastMessage">Course removed</span>
         <button id="undoBtn">UNDO</button>
     </div>

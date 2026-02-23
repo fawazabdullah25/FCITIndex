@@ -3,6 +3,8 @@
    ========================================== */
 
 :root {
+    color-scheme: dark;
+
     * {
         box-sizing: border-box;
     }
@@ -277,7 +279,7 @@ body.form-active {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s ease;
+    transition: border-color 0.3s ease, transform 0.3s ease, background 0.3s ease;
 }
 
 .settings-toggle {
@@ -374,7 +376,7 @@ select {
     border-radius: 8px;
     color: var(--text-primary);
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
     appearance: none;
     background-image: var(--select-arrow);
     background-repeat: no-repeat;
@@ -387,7 +389,7 @@ select {
     }
 }
 
-select:focus {
+select:focus-visible {
     outline: none;
     border-color: var(--accent-primary);
     box-shadow: 0 0 15px var(--accent-glow);
@@ -402,7 +404,7 @@ button {
     border: none;
     border-radius: 8px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
     text-transform: uppercase;
     letter-spacing: 1px;
 }
@@ -552,6 +554,50 @@ section {
     white-space: nowrap;
 }
 
+/* Gap indicator (compressed gap view) */
+.gap-indicator {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.gap-indicator-time {
+    border: none;
+}
+
+.gap-indicator-day {
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    background: repeating-linear-gradient(-45deg,
+            transparent,
+            transparent 4px,
+            rgba(255, 255, 255, 0.03) 4px,
+            rgba(255, 255, 255, 0.03) 8px);
+}
+
+.gap-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--bg-primary);
+    padding: 1px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    letter-spacing: 0.5px;
+}
+
+/* Compress Gaps button active state */
+.compress-gaps-btn.active {
+    background: var(--accent-primary) !important;
+    color: var(--bg-primary) !important;
+    border-color: var(--accent-primary) !important;
+}
+
 .day-column {
     flex: 1;
     position: relative;
@@ -583,7 +629,7 @@ section {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
     overflow: hidden;
     color: var(--text-primary);
-    transition: all 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     z-index: 1;
     box-sizing: border-box;
     display: flex;
@@ -742,7 +788,7 @@ section {
     border: 2px solid var(--border-color);
     border-radius: 50px;
     overflow: hidden;
-    transition: all 0.3s ease;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
     width: 100%;
     max-width: 100%;
 }
@@ -760,6 +806,7 @@ section {
     border: none;
     color: var(--text-primary);
     outline: none;
+    /* parent .search-pill:focus-within provides visible ring */
     min-width: 0;
 }
 
@@ -770,11 +817,12 @@ section {
 #fetchBtn {
     padding: 12px 20px;
     font-size: 14px;
-    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    background: var(--accent-primary);
     color: var(--bg-primary);
     border: none;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: none !important;
+    transform: none !important;
     width: auto;
     flex-shrink: 0;
     border-radius: 0 50px 50px 0;
@@ -782,8 +830,7 @@ section {
 }
 
 #fetchBtn:hover {
-    transform: none;
-    box-shadow: 0 0 15px var(--accent-glow), 0 0 20px rgba(0, 136, 204, 0.3);
+    background: var(--accent-secondary);
 }
 
 .search-icon {
@@ -924,7 +971,7 @@ section {
     border-radius: 50%;
     cursor: pointer;
     padding: 0;
-    transition: all 0.2s;
+    transition: border-color 0.2s ease, background 0.2s ease;
 }
 
 @media (hover: hover) {
@@ -1057,7 +1104,7 @@ section {
     justify-content: center;
     padding: 0;
     line-height: 1;
-    transition: all 0.3s ease;
+    transition: border-color 0.3s ease, transform 0.3s ease;
 }
 
 .modal-close-btn img {
@@ -1113,8 +1160,8 @@ section {
     cursor: pointer;
 }
 
-.filters-panel input:focus,
-.custom-select:focus {
+.filters-panel input:focus-visible,
+.custom-select:focus-visible {
     outline: none;
     border-color: var(--accent-primary);
 }
@@ -1139,7 +1186,7 @@ section {
     cursor: pointer;
     font-size: 12px;
     color: var(--text-secondary);
-    transition: all 0.2s;
+    transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
     text-transform: none;
 }
 
@@ -1187,7 +1234,7 @@ section {
     border-radius: 12px;
     margin-bottom: 15px;
     overflow: hidden;
-    transition: all 0.3s ease;
+    transition: border-color 0.3s ease;
 }
 
 .section-card:hover {
@@ -1528,23 +1575,33 @@ section {
 }
 
 .confirm-yes-btn {
-    background: var(--danger);
-    color: white;
+    background: var(--accent-primary);
+    color: var(--bg-primary);
     border: none;
     border-radius: 6px;
     cursor: pointer;
     font-weight: 600;
 }
 
-.confirm-no-btn {
-    background: var(--accent-primary);
-    border: 1px solid var(--accent-primary);
+.confirm-yes-btn.btn-danger {
+    background: var(--danger);
     color: white;
+}
+
+.confirm-no-btn {
+    background: transparent;
+    border: 2px solid var(--border-color);
+    color: var(--text-primary);
     border-radius: 6px;
     cursor: pointer;
+    font-weight: 600;
 }
 
 .confirm-yes-btn:hover {
+    box-shadow: 0 5px 25px var(--accent-glow);
+}
+
+.confirm-yes-btn.btn-danger:hover {
     box-shadow: 0 5px 25px var(--danger-glow);
 }
 
@@ -1679,9 +1736,22 @@ section {
         font-size: 11px;
     }
 
-    /* Button text wrapping for small screens */
+    /* Button text wrapping/layout for small screens */
     #scheduleControls {
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        width: 100%;
+        margin: 15px 0;
+    }
+
+    .schedule-actions-right {
+        display: contents;
+    }
+
+    /* When in list view, COMPRESS GAPS is hidden, so SWITCH TO Grid View takes full width */
+    #timetableContainer.mobile-list-active+#scheduleControls .mobile-view-toggle {
+        grid-column: 1 / -1;
     }
 
     #scheduleControls button,
@@ -1901,7 +1971,6 @@ body {
     padding-top: 100px;
     /* Header (80px) + Gap (20px) */
     min-height: 100vh;
-    transition: background-color 0.3s, color 0.3s;
 }
 
 #undoBtn {
@@ -1950,7 +2019,7 @@ body.modal-open {
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
     text-transform: uppercase;
     letter-spacing: 1px;
     align-items: center;
@@ -2115,6 +2184,16 @@ body.modal-open {
     margin-bottom: 20px;
 }
 
+#timetableContainer.mobile-list-active+#scheduleControls .compress-gaps-btn {
+    display: none !important;
+}
+
+.schedule-actions-right {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
 .action-btn {
     flex: 1;
     display: inline-flex;
@@ -2126,10 +2205,10 @@ body.modal-open {
     border: 2px solid var(--accent-primary);
     color: var(--accent-primary);
     border-radius: 8px;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -2266,12 +2345,12 @@ select {
     font-size: 14px;
     box-sizing: border-box;
     margin-bottom: 15px;
-    transition: all 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.modal-content input:focus,
-.modal-content select:focus,
-.modal-content textarea:focus {
+.modal-content input:focus-visible,
+.modal-content select:focus-visible,
+.modal-content textarea:focus-visible {
     border-color: var(--accent-primary);
     box-shadow: 0 0 0 2px var(--accent-glow);
     outline: none;
@@ -2399,7 +2478,7 @@ select,
     color: var(--text-muted);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     user-select: none;
     font-size: 0.85rem;
 }
@@ -2457,9 +2536,9 @@ select,
     align-items: center;
 }
 
-.modal-form-panel input:focus,
-.modal-form-panel select:focus,
-.modal-form-panel textarea:focus {
+.modal-form-panel input:focus-visible,
+.modal-form-panel select:focus-visible,
+.modal-form-panel textarea:focus-visible {
     border-color: var(--accent-primary);
     outline: none;
     box-shadow: 0 0 0 2px var(--accent-glow);
@@ -2493,7 +2572,7 @@ select,
     color: var(--text-muted);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     user-select: none;
     font-size: 0.85rem;
 }
@@ -2632,4 +2711,82 @@ html {
 
 .modal-content {
     scrollbar-gutter: stable;
+}
+
+/* ==========================================
+   Additional Guidelines Compliance
+   ========================================== */
+
+/* Skip-to-content link */
+.skip-link {
+    position: absolute;
+    top: -100%;
+    left: 16px;
+    z-index: 9999;
+    padding: 8px 16px;
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    border-radius: 0 0 8px 8px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: top 0.2s ease;
+}
+
+.skip-link:focus {
+    top: 0;
+}
+
+/* Touch: remove 300ms double-tap delay */
+button,
+a,
+label,
+select,
+input {
+    touch-action: manipulation;
+}
+
+/* Prevent background scroll when modal is open */
+.modal-overlay {
+    overscroll-behavior: contain;
+}
+
+/* Tabular numbers for numeric data */
+.total-credits-badge,
+.section-crn,
+.credits-badge,
+.time-label,
+#totalCreditsCount {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Balanced text wrapping on headings */
+h1,
+h2,
+h3 {
+    text-wrap: balance;
+}
+
+/* Light theme color-scheme */
+[data-theme="light"] {
+    color-scheme: light;
+}
+
+/* ==========================================
+   Reduced Motion
+   ========================================== */
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    #splash-screen,
+    #splash-screen .splash-logo {
+        transition: none;
+    }
 }
